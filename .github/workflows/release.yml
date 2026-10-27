@@ -20,7 +20,7 @@ jobs:
       - name: Create ZIP archive via git archive
         run: |
           TAG="${GITHUB_REF_NAME}"
-          PREFIX="my-app-${TAG}"
+          PREFIX="kyb_import_coords ${TAG}"
           mkdir -p dist
           git archive --format=zip --prefix="${PREFIX}/" HEAD -o "dist/${PREFIX}.zip"
 
