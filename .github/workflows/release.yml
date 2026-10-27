@@ -19,10 +19,11 @@ jobs:
 
       - name: Create ZIP archive via git archive
         run: |
-          TAG="${GITHUB_REF_NAME}"
-          PREFIX="kyb_import_coords ${TAG}"
+          TAG="${GITHUB_REF_NAME}"                       # например, v1.0.0
+          FOLDER_PREFIX="KYB_import_coords"              # папка внутри архива
+          ZIP_NAME="kyb_import_coords-${TAG}"            # имя ZIP-файла
           mkdir -p dist
-          git archive --format=zip --prefix="${PREFIX}/" HEAD -o "dist/${PREFIX}.zip"
+          git archive --format=zip --prefix="${FOLDER_PREFIX}/" HEAD -o "dist/${ZIP_NAME}.zip"
 
       - name: Upload Release Asset
         uses: softprops/action-gh-release@v2
