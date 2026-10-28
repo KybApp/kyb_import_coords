@@ -16,6 +16,9 @@ tags=import, coordinates, csv, excel, shapefile, geojson, kml, area, preview
 # Краткое описание (можно в HTML)
 about=Плагин для загрузки и предварительной проверки пространственных данных. Поддерживает текстовые файлы (CSV, TXT), таблицы Excel (XLS, XLSX, ODS) и ГИС-файлы (SHP, GeoJSON, KML, GPKG). Позволяет визуально проверить координаты, площади и конфигурацию объектов на встроенной карте до импорта в проект. Автоматически определяет системы координат, форматы записи (десятичные, ГГММСС) и рассчитывает метрики (площадь, периметр, длину).
 
+# Cсылка на репозиторий с исходным кодом
+repository=https://github.com/KybApp/kyb_import_coords.git
+
 # Статус
 experimental=False
 deprecated=False
@@ -25,6 +28,3 @@ license=GNU General Public License v3.0
 
 # Авторские права
 copyright=2026, Шершавин Д.
-
-# Минимальная требуемая версия QGIS (дублирует параметр выше, но полезно для строгого контроля)
-qgisMinimumVersion=3.28
