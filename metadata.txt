@@ -29,11 +29,10 @@ tags[ru]=импорт, координаты, csv, excel, shapefile, geojson, kml
 about=Plugin for loading and previewing spatial data. Supports text files (CSV, TXT), Excel tables (XLS, XLSX, ODS), and GIS files (SHP, GeoJSON, KML, GPKG). Allows visual validation of coordinates, areas, and object configuration on a built-in map before importing into the project. Automatically detects coordinate systems, formats (decimal, DMS), and calculates metrics (area, perimeter, length).
 about[ru]=Плагин для загрузки и предварительной проверки пространственных данных. Поддерживает текстовые файлы (CSV, TXT), таблицы Excel (XLS, XLSX, ODS) и ГИС-файлы (SHP, GeoJSON, KML, GPKG). Позволяет визуально проверить координаты, площади и конфигурацию объектов на встроенной карте до импорта в проект. Автоматически определяет системы координат, форматы записи (десятичные, ГГММСС) и рассчитывает метрики (площадь, периметр, длину).
 
-; --- Ссылка на репозиторий ---
+; --- Ссылки ---
 repository=https://github.com/KybApp/kyb_import_coords.git
-
-; --- Ссылка на трекер ошибок (ОБЯЗАТЕЛЬНОЕ ПОЛЕ) ---
 tracker=https://github.com/KybApp/kyb_import_coords/issues
+homepage=https://github.com/KybApp/kyb_import_coords
 
 ; --- Статус ---
 experimental=False
