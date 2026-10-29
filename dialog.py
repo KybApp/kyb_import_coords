@@ -28,22 +28,40 @@
 """
 
 import csv
-import io
 import math
 import os
 import re
 from collections import Counter
 
+from qgis.PyQt.QtCore import QRectF, Qt
+from qgis.PyQt.QtGui import QBrush, QColor, QFont, QPainter, QPen
+
 # ---------- Qt: виджеты и утилиты ----------
 from qgis.PyQt.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QLineEdit,
-    QPushButton, QComboBox, QSpinBox, QTableWidget, QTableWidgetItem,
-    QFileDialog, QMessageBox, QApplication, QCheckBox, QStackedWidget,
-    QWidget, QSplitter, QFrame, QMenu, QGroupBox, QColorDialog,
-    QDialogButtonBox
+    QApplication,
+    QCheckBox,
+    QColorDialog,
+    QComboBox,
+    QDialog,
+    QDialogButtonBox,
+    QFileDialog,
+    QFrame,
+    QGridLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMenu,
+    QMessageBox,
+    QPushButton,
+    QSpinBox,
+    QSplitter,
+    QStackedWidget,
+    QTableWidget,
+    QTableWidgetItem,
+    QVBoxLayout,
+    QWidget,
 )
-from qgis.PyQt.QtCore import Qt, QRectF
-from qgis.PyQt.QtGui import QColor, QPainter, QPen, QBrush, QFont
 
 # ---------- Совместимость констант Qt5 (QGIS 3.x) и Qt6 (QGIS 4.x) ----------
 # В Qt6 часть констант переехала в пространства имён.
@@ -82,90 +100,146 @@ try:
     _QT_COLOR_ALPHA = QColorDialog.ColorDialogOption.ShowAlphaChannel
 except AttributeError:
     _QT_COLOR_ALPHA = QColorDialog.ShowAlphaChannel
-
 try:
     _QT_BTN_OK = QDialogButtonBox.StandardButton.Ok
     _QT_BTN_CANCEL = QDialogButtonBox.StandardButton.Cancel
-    _QT_BTN_RESET = QDialogButtonBox.ButtonRole.ResetRole
+    _QT_BTN_ROLE_RESET = QDialogButtonBox.ButtonRole.ResetRole
+    _QT_ITEM_EDITABLE = Qt.ItemFlag.ItemIsEditable
 except AttributeError:
     _QT_BTN_OK = QDialogButtonBox.Ok
     _QT_BTN_CANCEL = QDialogButtonBox.Cancel
-    _QT_BTN_RESET = QDialogButtonBox.ResetRole
-
-try:
-    _QT_ITEM_EDITABLE = Qt.ItemFlag.ItemIsEditable
-except AttributeError:
+    _QT_BTN_ROLE_RESET = QDialogButtonBox.ResetRole
     _QT_ITEM_EDITABLE = Qt.ItemIsEditable
 
-# ---------- Совместимость типов полей ----------
-# В QGIS < 3.38 типы полей описывались через QVariant.String и т.п.,
-# в 3.38+ — через QMetaType.Type.QString. Пробуем первый вариант,
-# при неудаче — второй. Так модуль работает на обеих ветках.
+# Qt6 (PyQt6) перенёс StandardButton и ItemFlag в отдельные enum-пространства.
+# Qt5 (PyQt5) использует плоские имена. Паттерн try/except покрывает оба.
+
+
+def _exec_dialog(dlg):
+    """Запускает диалог совместимым способом (Qt5/Qt6)."""
+    if hasattr(dlg, "exec"):
+        return dlg.exec()
+    return dlg.exec_()
+
+
 try:
     from qgis.PyQt.QtCore import QVariant
+
     T_STRING = QVariant.String
     T_DOUBLE = QVariant.Double
     T_INT = QVariant.Int
-except Exception:
+except (ImportError, AttributeError):
     from qgis.PyQt.QtCore import QMetaType
+
     T_STRING = QMetaType.Type.QString
     T_DOUBLE = QMetaType.Type.Double
     T_INT = QMetaType.Type.Int
 
 # ---------- QGIS: работа со слоями, геометрией, стилями ----------
 from qgis.core import (
-    QgsVectorLayer, QgsFeature, QgsGeometry, QgsPointXY,
-    QgsField, QgsProject, QgsCoordinateReferenceSystem, QgsWkbTypes,
-    QgsFillSymbol, QgsMarkerSymbol, QgsPalLayerSettings, QgsTextFormat,
-    QgsVectorLayerSimpleLabeling, QgsSettings, QgsVectorFileWriter,
-    QgsRectangle
+    Qgis,
+    QgsCoordinateReferenceSystem,
+    QgsFeature,
+    QgsField,
+    QgsFillSymbol,
+    QgsGeometry,
+    QgsMarkerSymbol,
+    QgsMessageLog,
+    QgsPalLayerSettings,
+    QgsPointXY,
+    QgsProject,
+    QgsRectangle,
+    QgsSettings,
+    QgsTextFormat,
+    QgsVectorFileWriter,
+    QgsVectorLayer,
+    QgsVectorLayerSimpleLabeling,
+    QgsWkbTypes,
 )
-from qgis.gui import (
-    QgsProjectionSelectionWidget, QgsRubberBand, QgsMapCanvas
-)
+from qgis.gui import QgsMapCanvas, QgsProjectionSelectionWidget, QgsRubberBand
 
+try:
+    # QGIS 4 / PyQt6 (строгие перечисления)
+    _QgsWkbTypesType_Point = QgsWkbTypes.Type.Point
+    _QgsWkbTypesType_LineString = QgsWkbTypes.Type.LineString
+    _QgsWkbTypesType_Polygon = QgsWkbTypes.Type.Polygon
+    _QgsWkbTypesType_MultiPolygon = QgsWkbTypes.Type.MultiPolygon
+
+    _QgsWkbTypesGeom_Point = QgsWkbTypes.GeometryType.PointGeometry
+    _QgsWkbTypesGeom_Line = QgsWkbTypes.GeometryType.LineGeometry
+    _QgsWkbTypesGeom_Polygon = QgsWkbTypes.GeometryType.PolygonGeometry
+
+    _QMessageBox_Yes = QMessageBox.StandardButton.Yes
+    _QMessageBox_No = QMessageBox.StandardButton.No
+
+    _QgsVectorFileWriter_Action = (
+        QgsVectorFileWriter.ActionOnExistingFile.CreateOrOverwriteLayer
+    )
+    _QgsVectorFileWriter_Error = QgsVectorFileWriter.WriterError.NoError
+
+    _QColor_HexArgb = QColor.NameFormat.HexArgb
+except AttributeError:
+    # QGIS 3 / PyQt5 (старые перечисления)
+    _QgsWkbTypesType_Point = QgsWkbTypes.Point
+    _QgsWkbTypesType_LineString = QgsWkbTypes.LineString
+    _QgsWkbTypesType_Polygon = QgsWkbTypes.Polygon
+    _QgsWkbTypesType_MultiPolygon = QgsWkbTypes.MultiPolygon
+
+    _QgsWkbTypesGeom_Point = QgsWkbTypes.PointGeometry
+    _QgsWkbTypesGeom_Line = QgsWkbTypes.LineGeometry
+    _QgsWkbTypesGeom_Polygon = QgsWkbTypes.PolygonGeometry
+
+    _QMessageBox_Yes = QMessageBox.Yes
+    _QMessageBox_No = QMessageBox.No
+
+    _QgsVectorFileWriter_Action = QgsVectorFileWriter.CreateOrOverwriteLayer
+    _QgsVectorFileWriter_Error = QgsVectorFileWriter.NoError
+
+    _QColor_HexArgb = QColor.HexArgb
 
 # ============================================================
 # КОНСТАНТЫ
 # ============================================================
 
-DELIMS = {'авто': None,
-          'таб': '\t',
-          'запятая': ',',
-          'точка с запятой': ';',
-          'пробел': ' '}
+DELIMS = {
+    "авто": None,
+    "таб": "\t",
+    "запятая": ",",
+    "точка с запятой": ";",
+    "пробел": " ",
+}
 
-ENCODINGS = ['UTF-8', 'CP1251', 'UTF-16']
-GEOMS = ['Точка', 'Линия', 'Полигон', 'Многоконтурный полигон']
-ORDERS = ['Широта, Долгота', 'Долгота, Широта']
-AXES = ['Север, Восток', 'Восток, Север']
-POLY_STYLES = ['Контур', 'Заливка', 'Контур + заливка']
+ENCODINGS = ["UTF-8", "CP1251", "UTF-16"]
+GEOMS = ["Точка", "Линия", "Полигон", "Многоконтурный полигон"]
+ORDERS = ["Широта, Долгота", "Долгота, Широта"]
+AXES = ["Север, Восток", "Восток, Север"]
+POLY_STYLES = ["Контур", "Заливка", "Контур + заливка"]
 
 GEOM_URI = {
-    'Точка': 'Point',
-    'Линия': 'LineString',
-    'Полигон': 'Polygon',
-    'Многоконтурный полигон': 'MultiPolygon',
+    "Точка": "Point",
+    "Линия": "LineString",
+    "Полигон": "Polygon",
+    "Многоконтурный полигон": "MultiPolygon",
 }
 GEOM_WKB = {
-    'Точка': QgsWkbTypes.Point,
-    'Линия': QgsWkbTypes.LineString,
-    'Полигон': QgsWkbTypes.Polygon,
-    'Многоконтурный полигон': QgsWkbTypes.MultiPolygon,
+    "Точка": _QgsWkbTypesType_Point,
+    "Линия": _QgsWkbTypesType_LineString,
+    "Полигон": _QgsWkbTypesType_Polygon,
+    "Многоконтурный полигон": _QgsWkbTypesType_MultiPolygon,
 }
 
 HMS_RE = re.compile(
     r'^(-?\d+(?:[.,]\d+)?)°(\d+(?:[.,]\d+)?)[\'′](\d+(?:[.,]\d+)?)["″]$'
 )
 
-FMT_DECIMAL = 'decimal'
-FMT_HMS_ONE = 'hms_one'
-FMT_HMS_THREE = 'hms_three'
+FMT_DECIMAL = "decimal"
+FMT_HMS_ONE = "hms_one"
+FMT_HMS_THREE = "hms_three"
 
 FMT_LABELS = {
-    FMT_DECIMAL: 'Десятичные',
-    FMT_HMS_ONE: 'ГМС в одной колонке',
-    FMT_HMS_THREE: 'ГМС в трёх колонках',
+    FMT_DECIMAL: "Десятичные",
+    FMT_HMS_ONE: "ГМС в одной колонке",
+    FMT_HMS_THREE: "ГМС в трёх колонках",
 }
 
 HMS_EXAMPLE = "55°43'28.05\"  или  55\t43\t28.05"
@@ -186,17 +260,20 @@ NUM_RATIO_MIN = 0.4
 # Остальные сворачиваются в строку «... ещё N скрыто ...».
 MAX_VERTICES_PER_OBJECT = 80
 
-SETTINGS_PREFIX = 'KYB_import_coords/'
+SETTINGS_PREFIX = "KYB_import_coords/"
 
 # Стиль красной рамки для полей с ошибкой. Держим в одном месте,
 # чтобы визуально все проблемные поля выглядели одинаково.
-ERROR_STYLE_QLE = 'QLineEdit { border: 2px solid #cc0000; background: #fff5f5; }'
-ERROR_STYLE_FRAME = 'QFrame#crs_frame { border: 2px solid #cc0000; border-radius: 3px; }'
+ERROR_STYLE_QLE = "QLineEdit { border: 2px solid #cc0000; background: #fff5f5; }"
+ERROR_STYLE_FRAME = (
+    "QFrame#crs_frame { border: 2px solid #cc0000; border-radius: 3px; }"
+)
 
 
 # ============================================================
 # ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
 # ============================================================
+
 
 def _num(s):
     """Приводит строку к float.
@@ -210,12 +287,12 @@ def _num(s):
     """
     if s is None:
         return None
-    s = str(s).strip().replace(',', '.')
+    s = str(s).strip().replace(",", ".")
     if not s:
         return None
     try:
         return float(s)
-    except Exception:
+    except (ValueError, TypeError):
         return None
 
 
@@ -241,9 +318,9 @@ def _hms_to_dec(d, mi, s):
     Возвращает (значение, None) или (None, 'сообщение об ошибке').
     """
     if mi >= 60:
-        return None, f'минуты = {mi} (должны быть < 60)'
+        return None, f"минуты = {mi} (должны быть < 60)"
     if s >= 60:
-        return None, f'секунды = {s} (должны быть < 60)'
+        return None, f"секунды = {s} (должны быть < 60)"
     sign = -1 if d < 0 else 1
     return sign * (abs(d) + mi / 60.0 + s / 3600.0), None
 
@@ -254,21 +331,21 @@ def parse_hms_one(text):
     Пример корректного значения: 55°43'28.05" или 55°43'28,05"
     Пробелы внутри ГМС не допускаются.
     """
-    text = (text or '').strip()
+    text = (text or "").strip()
     m = HMS_RE.match(text)
     if not m:
-        return None, f'не похоже на ГМС. Пример: {HMS_EXAMPLE}'
+        return None, f"не похоже на ГМС. Пример: {HMS_EXAMPLE}"
     d = _num(m.group(1))
     mi = _num(m.group(2))
     s = _num(m.group(3))
     if d is None or mi is None or s is None:
-        return None, 'не число внутри ГМС'
+        return None, "не число внутри ГМС"
     return _hms_to_dec(d, mi, s)
 
 
-def _apply_polygon_style(layer, style_name,
-                         outline_color=None, outline_width=None,
-                         fill_color=None):
+def _apply_polygon_style(
+    layer, style_name, outline_color=None, outline_width=None, fill_color=None
+):
     """Задаёт стиль полигона: контур, заливка или оба.
 
     Параметры:
@@ -285,28 +362,34 @@ def _apply_polygon_style(layer, style_name,
     ow = outline_width if outline_width is not None else 0.5
     fc = fill_color or QColor(150, 150, 150, 128)
 
-    if style_name == 'Контур':
-        props = {'style': 'no',
-                 'outline_style': 'solid',
-                 'outline_color': oc.name(QColor.HexArgb),
-                 'outline_width': str(ow)}
-    elif style_name == 'Заливка':
-        props = {'style': 'solid',
-                 'color': fc.name(QColor.HexArgb),
-                 'outline_style': 'no'}
+    if style_name == "Контур":
+        props = {
+            "style": "no",
+            "outline_style": "solid",
+            "outline_color": oc.name(_QColor_HexArgb),
+            "outline_width": str(ow),
+        }
+    elif style_name == "Заливка":
+        props = {
+            "style": "solid",
+            "color": fc.name(_QColor_HexArgb),
+            "outline_style": "no",
+        }
     else:
-        props = {'style': 'solid',
-                 'color': fc.name(QColor.HexArgb),
-                 'outline_style': 'solid',
-                 'outline_color': oc.name(QColor.HexArgb),
-                 'outline_width': str(ow)}
+        props = {
+            "style": "solid",
+            "color": fc.name(_QColor_HexArgb),
+            "outline_style": "solid",
+            "outline_color": oc.name(_QColor_HexArgb),
+            "outline_width": str(ow),
+        }
 
     symbol = QgsFillSymbol.createSimple(props)
     layer.renderer().setSymbol(symbol)
     layer.triggerRepaint()
 
 
-def _enable_number_labels(layer, color='0,0,0,255', size=9):
+def _enable_number_labels(layer, color="0,0,0,255", size=9):
     """Включает подписи по атрибуту 'num' на слое.
 
     Параметры:
@@ -318,19 +401,19 @@ def _enable_number_labels(layer, color='0,0,0,255', size=9):
     иначе в некоторых сборках QGIS подписи не отображаются.
     """
     settings = QgsPalLayerSettings()
-    settings.fieldName = 'num'
+    settings.fieldName = "num"
     settings.isExpression = False
     try:
         settings.enabled = True
-    except Exception:
-        pass
+    except Exception as e:  # noqa: BLE001 — слот не должен ронять плагин
+        _log_ignored_exception(e, "некритичная ошибка")
 
     fmt = QgsTextFormat()
     fmt.setSize(size)
     try:
         fmt.setColor(QColor(color))
-    except Exception:
-        pass
+    except Exception as e:  # noqa: BLE001 — слот не должен ронять плагин
+        _log_ignored_exception(e, "некритичная ошибка")
     settings.setFormat(fmt)
 
     layer.setLabeling(QgsVectorLayerSimpleLabeling(settings))
@@ -366,14 +449,14 @@ def _geom_area_m2(geom, units):
     Возвращает float в м² (0.0 при ошибке).
     """
     try:
-        if units == 'degrees':
+        if units == "degrees":
             R = 6378137.0
             deg2m = R * math.pi / 180.0
             c = geom.centroid().asPoint()
             cos_lat = math.cos(math.radians(c.y()))
-            return geom.area() * (deg2m ** 2) * cos_lat
+            return geom.area() * (deg2m**2) * cos_lat
         return geom.area()
-    except Exception:
+    except (ValueError, TypeError, AttributeError, RuntimeError):
         return 0.0
 
 
@@ -393,7 +476,7 @@ def _geom_length_m(geom, units):
     Возвращает float в м (0.0 при ошибке).
     """
     try:
-        if units != 'degrees':
+        if units != "degrees":
             return geom.length()
 
         R = 6378137.0
@@ -414,8 +497,16 @@ def _geom_length_m(geom, units):
             dy = (p2.y() - p1.y()) * deg2m
             total += math.hypot(dx, dy)
         return total
-    except Exception:
+    except (ValueError, TypeError, AttributeError, RuntimeError):
         return 0.0
+
+
+def _log_ignored_exception(e, context=""):
+    """Логирует ошибку, которую мы решили проигнорировать."""
+    msg = f"Проигнорирована ошибка {context}: {type(e).__name__} - {e}"
+    QgsMessageLog.logMessage(msg, "KYB_import_coords", Qgis.Warning)
+
+
 class ColorButton(QPushButton):
     """Кнопка для выбора цвета.
 
@@ -446,10 +537,10 @@ class ColorButton(QPushButton):
         b = self._color.blue()
         a = self._color.alpha()
         self.setStyleSheet(
-            f'QPushButton {{ background-color: rgba({r},{g},{b},{a}); '
-            f'border: 1px solid #888888; border-radius: 3px; }}'
+            f"QPushButton {{ background-color: rgba({r},{g},{b},{a}); "
+            f"border: 1px solid #888888; border-radius: 3px; }}"
         )
-        self.setText('')
+        self.setText("")
 
     def _choose(self):
         """Открывает QColorDialog и возвращает выбранный цвет.
@@ -464,11 +555,11 @@ class ColorButton(QPushButton):
         """
         parent = self.window()
         dlg = QColorDialog(self._color, parent)
-        dlg.setWindowTitle('Выбор цвета')
+        dlg.setWindowTitle("Выбор цвета")
         dlg.setOption(_QT_COLOR_ALPHA, True)
-        dlg.setStyleSheet('')  # снимаем унаследованный стиль
+        dlg.setStyleSheet("")  # снимаем унаследованный стиль
 
-        if dlg.exec_():
+        if _exec_dialog(dlg):
             self._color = dlg.currentColor()
             self._update_style()
 
@@ -494,7 +585,7 @@ class DisplaySettingsDialog(QDialog):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle('Настройки отображения')
+        self.setWindowTitle("Настройки отображения")
         self.setMinimumWidth(440)
         self._build_ui()
         self._load_from_settings()
@@ -503,65 +594,65 @@ class DisplaySettingsDialog(QDialog):
         root = QVBoxLayout(self)
 
         # --- Точки ---
-        gb_pt = QGroupBox('Точки')
+        gb_pt = QGroupBox("Точки")
         g_pt = QGridLayout(gb_pt)
         self.pt_color = ColorButton(QColor(230, 0, 0, 220))
         self.pt_size = QSpinBox()
         self.pt_size.setRange(1, 50)
-        self.pt_size.setSuffix(' px')
-        g_pt.addWidget(QLabel('Цвет:'), 0, 0)
+        self.pt_size.setSuffix(" px")
+        g_pt.addWidget(QLabel("Цвет:"), 0, 0)
         g_pt.addWidget(self.pt_color, 0, 1)
-        g_pt.addWidget(QLabel('Размер:'), 1, 0)
+        g_pt.addWidget(QLabel("Размер:"), 1, 0)
         g_pt.addWidget(self.pt_size, 1, 1)
         root.addWidget(gb_pt)
 
         # --- Линии ---
-        gb_ln = QGroupBox('Линии')
+        gb_ln = QGroupBox("Линии")
         g_ln = QGridLayout(gb_ln)
         self.ln_color = ColorButton(QColor(20, 160, 60, 255))
         self.ln_width = QSpinBox()
         self.ln_width.setRange(1, 20)
-        self.ln_width.setSuffix(' px')
-        g_ln.addWidget(QLabel('Цвет:'), 0, 0)
+        self.ln_width.setSuffix(" px")
+        g_ln.addWidget(QLabel("Цвет:"), 0, 0)
         g_ln.addWidget(self.ln_color, 0, 1)
-        g_ln.addWidget(QLabel('Толщина:'), 1, 0)
+        g_ln.addWidget(QLabel("Толщина:"), 1, 0)
         g_ln.addWidget(self.ln_width, 1, 1)
         root.addWidget(gb_ln)
 
         # --- Полигоны ---
-        gb_pg = QGroupBox('Полигоны')
+        gb_pg = QGroupBox("Полигоны")
         g_pg = QGridLayout(gb_pg)
         self.pg_out_color = ColorButton(QColor(230, 0, 0, 220))
         self.pg_out_width = QSpinBox()
         self.pg_out_width.setRange(0, 20)
-        self.pg_out_width.setSuffix(' px')
+        self.pg_out_width.setSuffix(" px")
         self.pg_fill_color = ColorButton(QColor(230, 0, 0, 50))
-        g_pg.addWidget(QLabel('Цвет контура:'), 0, 0)
+        g_pg.addWidget(QLabel("Цвет контура:"), 0, 0)
         g_pg.addWidget(self.pg_out_color, 0, 1)
-        g_pg.addWidget(QLabel('Толщина контура:'), 1, 0)
+        g_pg.addWidget(QLabel("Толщина контура:"), 1, 0)
         g_pg.addWidget(self.pg_out_width, 1, 1)
-        g_pg.addWidget(QLabel('Цвет заливки:'), 2, 0)
+        g_pg.addWidget(QLabel("Цвет заливки:"), 2, 0)
         g_pg.addWidget(self.pg_fill_color, 2, 1)
         root.addWidget(gb_pg)
 
         # --- Подписи ---
-        gb_lb = QGroupBox('Подписи')
+        gb_lb = QGroupBox("Подписи")
         g_lb = QGridLayout(gb_lb)
         self.lb_num_color = ColorButton(QColor(180, 0, 0, 255))
         self.lb_num_size = QSpinBox()
         self.lb_num_size.setRange(4, 30)
-        self.lb_num_size.setSuffix(' pt')
+        self.lb_num_size.setSuffix(" pt")
         self.lb_area_color = ColorButton(QColor(0, 60, 160, 255))
         self.lb_area_size = QSpinBox()
         self.lb_area_size.setRange(4, 30)
-        self.lb_area_size.setSuffix(' pt')
-        g_lb.addWidget(QLabel('Цвет номеров:'), 0, 0)
+        self.lb_area_size.setSuffix(" pt")
+        g_lb.addWidget(QLabel("Цвет номеров:"), 0, 0)
         g_lb.addWidget(self.lb_num_color, 0, 1)
-        g_lb.addWidget(QLabel('Размер номеров:'), 1, 0)
+        g_lb.addWidget(QLabel("Размер номеров:"), 1, 0)
         g_lb.addWidget(self.lb_num_size, 1, 1)
-        g_lb.addWidget(QLabel('Цвет площадей:'), 2, 0)
+        g_lb.addWidget(QLabel("Цвет площадей:"), 2, 0)
         g_lb.addWidget(self.lb_area_color, 2, 1)
-        g_lb.addWidget(QLabel('Размер площадей:'), 3, 0)
+        g_lb.addWidget(QLabel("Размер площадей:"), 3, 0)
         g_lb.addWidget(self.lb_area_size, 3, 1)
         root.addWidget(gb_lb)
 
@@ -569,7 +660,7 @@ class DisplaySettingsDialog(QDialog):
         bb = QDialogButtonBox(_QT_BTN_OK | _QT_BTN_CANCEL)
         bb.accepted.connect(self.accept)
         bb.rejected.connect(self.reject)
-        btn_reset = bb.addButton('Сбросить', _QT_BTN_RESET)
+        btn_reset = bb.addButton("Сбросить", _QT_BTN_ROLE_RESET)
         btn_reset.clicked.connect(self._reset_defaults)
         root.addWidget(bb)
 
@@ -580,43 +671,35 @@ class DisplaySettingsDialog(QDialog):
         и точности вынесены в отдельный диалог PrecisionSettingsDialog.
         """
         s = QgsSettings()
-        pre = SETTINGS_PREFIX + 'display/'
+        pre = SETTINGS_PREFIX + "display/"
 
         def get_color(key, default):
-            v = s.value(pre + key, '', type=str)
+            v = s.value(pre + key, "", type=str)
             if not v:
                 return QColor(default)
-            parts = v.split(',')
+            parts = v.split(",")
             if len(parts) != 4:
                 return QColor(default)
             try:
-                return QColor(int(parts[0]), int(parts[1]),
-                              int(parts[2]), int(parts[3]))
-            except Exception:
+                return QColor(
+                    int(parts[0]), int(parts[1]), int(parts[2]), int(parts[3])
+                )
+            except (ValueError, IndexError, TypeError):
                 return QColor(default)
 
         # Дефолты: точки синие, линии зелёные, полигон — красный
         # контур с розовой полупрозрачной заливкой.
-        self.pt_color.set_color(get_color('point_color', '#005adeff'))
-        self.pt_size.setValue(
-            s.value(pre + 'point_size', 6, type=int))
-        self.ln_color.set_color(get_color('line_color', '#14a03cff'))
-        self.ln_width.setValue(
-            s.value(pre + 'line_width', 2, type=int))
-        self.pg_out_color.set_color(
-            get_color('poly_outline_color', '#e60000dc'))
-        self.pg_out_width.setValue(
-            s.value(pre + 'poly_outline_width', 2, type=int))
-        self.pg_fill_color.set_color(
-            get_color('poly_fill_color', '#e6000032'))
-        self.lb_num_color.set_color(
-            get_color('num_label_color', '#b40000ff'))
-        self.lb_num_size.setValue(
-            s.value(pre + 'num_label_size', 10, type=int))
-        self.lb_area_color.set_color(
-            get_color('area_label_color', '#003ca0ff'))
-        self.lb_area_size.setValue(
-            s.value(pre + 'area_label_size', 10, type=int))
+        self.pt_color.set_color(get_color("point_color", "#005adeff"))
+        self.pt_size.setValue(s.value(pre + "point_size", 6, type=int))
+        self.ln_color.set_color(get_color("line_color", "#14a03cff"))
+        self.ln_width.setValue(s.value(pre + "line_width", 2, type=int))
+        self.pg_out_color.set_color(get_color("poly_outline_color", "#e60000dc"))
+        self.pg_out_width.setValue(s.value(pre + "poly_outline_width", 2, type=int))
+        self.pg_fill_color.set_color(get_color("poly_fill_color", "#e6000032"))
+        self.lb_num_color.set_color(get_color("num_label_color", "#b40000ff"))
+        self.lb_num_size.setValue(s.value(pre + "num_label_size", 10, type=int))
+        self.lb_area_color.set_color(get_color("area_label_color", "#003ca0ff"))
+        self.lb_area_size.setValue(s.value(pre + "area_label_size", 10, type=int))
 
     def _reset_defaults(self):
         """Возвращает все значения к дефолтным.
@@ -636,33 +719,43 @@ class DisplaySettingsDialog(QDialog):
         self.lb_num_size.setValue(10)
         self.lb_area_color.set_color(QColor(0, 60, 160, 255))
         self.lb_area_size.setValue(10)
-        # Формат по умолчанию — десятичные градусы, 8 знаков.
-        self.coord_format.setCurrentIndex(0)
-        self._update_precision_enabled()
 
     @staticmethod
     def _color_to_str(c):
-        return f'{c.red()},{c.green()},{c.blue()},{c.alpha()}'
+        return f"{c.red()},{c.green()},{c.blue()},{c.alpha()}"
 
     def accept(self):
         """Сохраняет настройки в QgsSettings и закрывает диалог."""
         s = QgsSettings()
-        pre = SETTINGS_PREFIX + 'display/'
+        pre = SETTINGS_PREFIX + "display/"
         try:
-            s.setValue(pre + 'area_label_color', self._color_to_str(self.lb_area_color.color()))
-            s.setValue(pre + 'area_label_size', self.lb_area_size.value())
-            s.setValue(pre + 'line_color', self._color_to_str(self.ln_color.color()))
-            s.setValue(pre + 'line_width', self.ln_width.value())
-            s.setValue(pre + 'poly_outline_color', self._color_to_str(self.pg_out_color.color()))
-            s.setValue(pre + 'poly_outline_width', self.pg_out_width.value())
-            s.setValue(pre + 'poly_fill_color', self._color_to_str(self.pg_fill_color.color()))
-            s.setValue(pre + 'num_label_color', self._color_to_str(self.lb_num_color.color()))
-            s.setValue(pre + 'num_label_size', self.lb_num_size.value())
-            s.setValue(pre + 'area_label_color', self._color_to_str(self.lb_area_color.color()))
-            s.setValue(pre + 'area_label_size', self.lb_area_size.value())
-        except Exception:
-            pass
-        super().accept()   
+            s.setValue(
+                pre + "area_label_color", self._color_to_str(self.lb_area_color.color())
+            )
+            s.setValue(pre + "area_label_size", self.lb_area_size.value())
+            s.setValue(pre + "line_color", self._color_to_str(self.ln_color.color()))
+            s.setValue(pre + "line_width", self.ln_width.value())
+            s.setValue(
+                pre + "poly_outline_color",
+                self._color_to_str(self.pg_out_color.color()),
+            )
+            s.setValue(pre + "poly_outline_width", self.pg_out_width.value())
+            s.setValue(
+                pre + "poly_fill_color", self._color_to_str(self.pg_fill_color.color())
+            )
+            s.setValue(
+                pre + "num_label_color", self._color_to_str(self.lb_num_color.color())
+            )
+            s.setValue(pre + "num_label_size", self.lb_num_size.value())
+            s.setValue(
+                pre + "area_label_color", self._color_to_str(self.lb_area_color.color())
+            )
+            s.setValue(pre + "area_label_size", self.lb_area_size.value())
+        except Exception as e:  # noqa: BLE001 — слот не должен ронять плагин
+            _log_ignored_exception(e, "некритичная ошибка")
+        super().accept()
+
+
 # ============================================================
 # ДИАЛОГ
 # ============================================================
@@ -681,7 +774,7 @@ class PrecisionSettingsDialog(QDialog):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle('Формат и точность координат')
+        self.setWindowTitle("Формат и точность координат")
         self.setMinimumWidth(400)
         self._build_ui()
         self._load_from_settings()
@@ -689,34 +782,34 @@ class PrecisionSettingsDialog(QDialog):
     def _build_ui(self):
         root = QVBoxLayout(self)
 
-        gb_fmt = QGroupBox('Формат координат')
+        gb_fmt = QGroupBox("Формат координат")
         g_fmt = QGridLayout(gb_fmt)
 
-        g_fmt.addWidget(QLabel('Широта/Долгота:'), 0, 0)
+        g_fmt.addWidget(QLabel("Широта/Долгота:"), 0, 0)
         self.coord_format = QComboBox()
-        self.coord_format.addItems(['Десятичные', 'ГГММСС'])
+        self.coord_format.addItems(["Десятичные", "ГГММСС"])
         self.coord_format.currentIndexChanged.connect(self._update_precision_enabled)
         g_fmt.addWidget(self.coord_format, 0, 1)
 
-        g_fmt.addWidget(QLabel('Знаков после запятой (градусы):'), 1, 0)
+        g_fmt.addWidget(QLabel("Знаков после запятой (градусы):"), 1, 0)
         self.deg_precision = QSpinBox()
         self.deg_precision.setRange(1, 15)
         g_fmt.addWidget(self.deg_precision, 1, 1)
 
-        g_fmt.addWidget(QLabel('Знаков после запятой (секунды):'), 2, 0)
+        g_fmt.addWidget(QLabel("Знаков после запятой (секунды):"), 2, 0)
         self.dms_seconds_precision = QSpinBox()
         self.dms_seconds_precision.setRange(1, 6)
         g_fmt.addWidget(self.dms_seconds_precision, 2, 1)
 
-        g_fmt.addWidget(QLabel('Знаков после запятой (метры):'), 3, 0)
+        g_fmt.addWidget(QLabel("Знаков после запятой (метры):"), 3, 0)
         self.meters_precision = QSpinBox()
         self.meters_precision.setRange(0, 6)
         g_fmt.addWidget(self.meters_precision, 3, 1)
 
         self.fmt_hint = QLabel(
-            'Для прямоугольных координат (метры) формат ГГММСС не применяется.'
+            "Для прямоугольных координат (метры) формат ГГММСС не применяется."
         )
-        self.fmt_hint.setObjectName('hint_label')
+        self.fmt_hint.setObjectName("hint_label")
         self.fmt_hint.setWordWrap(True)
         g_fmt.addWidget(self.fmt_hint, 4, 0, 1, 2)
 
@@ -725,27 +818,29 @@ class PrecisionSettingsDialog(QDialog):
         bb = QDialogButtonBox(_QT_BTN_OK | _QT_BTN_CANCEL)
         bb.accepted.connect(self.accept)
         bb.rejected.connect(self.reject)
-        btn_reset = bb.addButton('Сбросить', _QT_BTN_RESET)
+        btn_reset = bb.addButton("Сбросить", _QT_BTN_ROLE_RESET)
         btn_reset.clicked.connect(self._reset_defaults)
         root.addWidget(bb)
 
     def _update_precision_enabled(self):
-        is_dms = (self.coord_format.currentText() == 'ГГММСС')
+        is_dms = self.coord_format.currentText() == "ГГММСС"
         self.dms_seconds_precision.setEnabled(is_dms)
         self.deg_precision.setEnabled(not is_dms)
 
     def _load_from_settings(self):
         s = QgsSettings()
-        pre = SETTINGS_PREFIX + 'display/'
+        pre = SETTINGS_PREFIX + "display/"
 
-        fmt = s.value(pre + 'coord_format', 'decimal', type=str)
-        idx = self.coord_format.findText('ГГММСС' if fmt == 'dms' else 'Десятичные')
+        fmt = s.value(pre + "coord_format", "decimal", type=str)
+        idx = self.coord_format.findText("ГГММСС" if fmt == "dms" else "Десятичные")
         if idx >= 0:
             self.coord_format.setCurrentIndex(idx)
 
-        self.deg_precision.setValue(s.value(pre + 'deg_precision', 8, type=int))
-        self.dms_seconds_precision.setValue(s.value(pre + 'dms_seconds_precision', 3, type=int))
-        self.meters_precision.setValue(s.value(pre + 'meters_precision', 3, type=int))
+        self.deg_precision.setValue(s.value(pre + "deg_precision", 8, type=int))
+        self.dms_seconds_precision.setValue(
+            s.value(pre + "dms_seconds_precision", 3, type=int)
+        )
+        self.meters_precision.setValue(s.value(pre + "meters_precision", 3, type=int))
         self._update_precision_enabled()
 
     def _reset_defaults(self):
@@ -757,16 +852,19 @@ class PrecisionSettingsDialog(QDialog):
 
     def accept(self):
         s = QgsSettings()
-        pre = SETTINGS_PREFIX + 'display/'
+        pre = SETTINGS_PREFIX + "display/"
         try:
-            fmt = 'dms' if self.coord_format.currentText() == 'ГГММСС' else 'decimal'
-            s.setValue(pre + 'coord_format', fmt)
-            s.setValue(pre + 'deg_precision', self.deg_precision.value())
-            s.setValue(pre + 'dms_seconds_precision', self.dms_seconds_precision.value())
-            s.setValue(pre + 'meters_precision', self.meters_precision.value())
-        except Exception:
-            pass
+            fmt = "dms" if self.coord_format.currentText() == "ГГММСС" else "decimal"
+            s.setValue(pre + "coord_format", fmt)
+            s.setValue(pre + "deg_precision", self.deg_precision.value())
+            s.setValue(
+                pre + "dms_seconds_precision", self.dms_seconds_precision.value()
+            )
+            s.setValue(pre + "meters_precision", self.meters_precision.value())
+        except Exception as e:  # noqa: BLE001 — слот не должен ронять плагин
+            _log_ignored_exception(e, "некритичная ошибка")
         super().accept()
+
 
 class ScaleBarWidget(QWidget):
     """Простая масштабная линейка в стиле QGIS.
@@ -783,9 +881,9 @@ class ScaleBarWidget(QWidget):
     def __init__(self, canvas, parent=None):
         super().__init__(parent)
         self.canvas = canvas
-        self._text = '0'
-        self._mid = ''
-        self._end = ''
+        self._text = "0"
+        self._mid = ""
+        self._end = ""
         self.setFixedHeight(42)
         self.setMinimumWidth(160)
         self._temp_layer = None
@@ -812,18 +910,18 @@ class ScaleBarWidget(QWidget):
         try:
             ext = self.canvas.extent()
             if ext.isEmpty() or ext.width() == 0 or ext.height() == 0:
-                self._text = self._mid = self._end = ''
+                self._text = self._mid = self._end = ""
                 self.update()
                 return
-        except Exception:
-            self._text = self._mid = self._end = ''
+        except (AttributeError, RuntimeError):
+            self._text = self._mid = self._end = ""
             self.update()
             return
 
         # --- Определяем тип СК канвы ---
         try:
             crs = self.canvas.mapSettings().destinationCrs()
-        except Exception:
+        except (AttributeError, RuntimeError):
             crs = None
 
         is_geographic = crs is not None and crs.isGeographic()
@@ -839,20 +937,20 @@ class ScaleBarWidget(QWidget):
                 R = 6378137.0
                 m_per_deg = R * math.cos(math.radians(lat_c)) * math.pi / 180.0
                 m_per_px = deg_per_px * m_per_deg
-            except Exception:
+            except (ValueError, TypeError, AttributeError, RuntimeError):
                 m_per_px = 0.0
         else:
             # Проекционные СК — канва возвращает знаменатель масштаба.
             try:
                 scale = self.canvas.scale()
-            except Exception:
+            except (ValueError, TypeError, AttributeError, RuntimeError):
                 scale = 0
             if scale and scale > 0:
                 # 1 px ≈ scale / 3779 м (при 96 dpi).
                 m_per_px = scale / 3779.0
 
         if not m_per_px or m_per_px <= 0:
-            self._text = self._mid = self._end = ''
+            self._text = self._mid = self._end = ""
             self.update()
             return
 
@@ -860,7 +958,7 @@ class ScaleBarWidget(QWidget):
         # если на пиксель приходится больше 10 км — это явно ошибка,
         # а не реальный масштаб. Линейку не показываем.
         if m_per_px > 10000:
-            self._text = self._mid = self._end = ''
+            self._text = self._mid = self._end = ""
             self.update()
             return
 
@@ -876,13 +974,13 @@ class ScaleBarWidget(QWidget):
             # nice — в метрах, а _fmt_km ждёт километры.
             # Делим на 1000 до вызова.
             km = nice / 1000.0
-            self._text = '0'
+            self._text = "0"
             self._mid = _fmt_km(km / 2.0)
-            self._end = _fmt_km(km) + ' км'
+            self._end = _fmt_km(km) + " км"
         else:
-            self._text = '0'
+            self._text = "0"
             self._mid = _fmt_m(nice / 2.0)
-            self._end = _fmt_m(nice) + ' м'
+            self._end = _fmt_m(nice) + " м"
 
         self.update()
 
@@ -916,10 +1014,18 @@ class ScaleBarWidget(QWidget):
         # Вертикальные засечки по краям и в середине.
         p.setPen(QPen(QColor(60, 60, 60), 1))
         p.drawLine(int(bar_x), int(bar_y - 2), int(bar_x), int(bar_y + bar_h + 2))
-        p.drawLine(int(bar_x + half_w), int(bar_y - 2),
-                   int(bar_x + half_w), int(bar_y + bar_h + 2))
-        p.drawLine(int(bar_x + bar_w), int(bar_y - 2),
-                   int(bar_x + bar_w), int(bar_y + bar_h + 2))
+        p.drawLine(
+            int(bar_x + half_w),
+            int(bar_y - 2),
+            int(bar_x + half_w),
+            int(bar_y + bar_h + 2),
+        )
+        p.drawLine(
+            int(bar_x + bar_w),
+            int(bar_y - 2),
+            int(bar_x + bar_w),
+            int(bar_y + bar_h + 2),
+        )
 
         # Подписи.
         p.setPen(QPen(QColor(40, 40, 40), 1))
@@ -930,12 +1036,19 @@ class ScaleBarWidget(QWidget):
         fm = p.fontMetrics()
         text_y = bar_y - 8
 
-        p.drawText(int(bar_x - fm.horizontalAdvance(self._text) / 2),
-                   int(text_y), self._text)
-        p.drawText(int(bar_x + half_w - fm.horizontalAdvance(self._mid) / 2),
-                   int(text_y), self._mid)
-        p.drawText(int(bar_x + bar_w - fm.horizontalAdvance(self._end) / 2),
-                   int(text_y), self._end)
+        p.drawText(
+            int(bar_x - fm.horizontalAdvance(self._text) / 2), int(text_y), self._text
+        )
+        p.drawText(
+            int(bar_x + half_w - fm.horizontalAdvance(self._mid) / 2),
+            int(text_y),
+            self._mid,
+        )
+        p.drawText(
+            int(bar_x + bar_w - fm.horizontalAdvance(self._end) / 2),
+            int(text_y),
+            self._end,
+        )
 
 
 def _nice_round(v):
@@ -943,8 +1056,9 @@ def _nice_round(v):
     if v <= 0:
         return 1
     import math
+
     exp = math.floor(math.log10(v))
-    base = v / (10 ** exp)
+    base = v / (10**exp)
     if base < 1.5:
         nice = 1
     elif base < 3.5:
@@ -953,7 +1067,7 @@ def _nice_round(v):
         nice = 5
     else:
         nice = 10
-    return nice * (10 ** exp)
+    return nice * (10**exp)
 
 
 def _fmt_m(v):
@@ -964,7 +1078,7 @@ def _fmt_m(v):
         _fmt_m(1500)    -> '1 500'
         _fmt_m(10000)   -> '10 000'
     """
-    n = int(round(v))
+    n = round(v)
     s = str(n)
     # Вставляем пробел каждые 3 цифры справа налево.
     parts = []
@@ -972,7 +1086,7 @@ def _fmt_m(v):
         parts.insert(0, s[-3:])
         s = s[:-3]
     parts.insert(0, s)
-    return ' '.join(parts)
+    return " ".join(parts)
 
 
 def _fmt_km(v):
@@ -982,8 +1096,9 @@ def _fmt_km(v):
     для линейки больше не нужно.
     """
     if v == int(v):
-        return _fmt_m(int(v))   # тот же формат с пробелами
-    return f'{v:.1f}'.replace('.', ',')
+        return _fmt_m(int(v))  # тот же формат с пробелами
+    return f"{v:.1f}".replace(".", ",")
+
 
 class ImportDialog(QDialog):
     """Главное окно плагина."""
@@ -997,7 +1112,7 @@ class ImportDialog(QDialog):
         """
         super().__init__(iface.mainWindow())
         self.iface = iface
-        self.setWindowTitle('Импорт данных')
+        self.setWindowTitle("Импорт данных")
         self.resize(1240, 820)
         self.setAcceptDrops(True)
 
@@ -1007,9 +1122,9 @@ class ImportDialog(QDialog):
         self.rows = []
         self.headers = []
         self.detected_format = FMT_DECIMAL
-        self._source_text = ''
+        self._source_text = ""
         self._temp_layer = None
-        self._saved_vnum_col = ''
+        self._saved_vnum_col = ""
         # Список временных слоёв превью (номера, площади). Живут
         # только пока открыто окно.
         self._preview_layers = []
@@ -1018,7 +1133,7 @@ class ImportDialog(QDialog):
 
         # Пространственный вход (Shapefile / GeoJSON / KML).
         # Когда открыт такой файл, spatial_data заполняется списком:
-        #   [{'name': 'Точки', 'wkb': QgsWkbTypes.Point,
+        #   [{'name': 'Точки', 'wkb': _QgsWkbTypesType_Point,
         #     'layer': QgsVectorLayer, 'features': [...]}, ...]
         # Пустой список = работаем с текстовым входом.
         self.spatial_data = []
@@ -1060,40 +1175,44 @@ class ImportDialog(QDialog):
         Вызывается один раз при старте окна.
         """
         s = QgsSettings()
-        pre = SETTINGS_PREFIX + 'display/'
+        pre = SETTINGS_PREFIX + "display/"
 
         def col(key, default):
-            v = s.value(pre + key, '', type=str)
+            v = s.value(pre + key, "", type=str)
             if not v:
                 return QColor(default)
-            parts = v.split(',')
+            parts = v.split(",")
             if len(parts) != 4:
                 return QColor(default)
             try:
-                return QColor(int(parts[0]), int(parts[1]),
-                              int(parts[2]), int(parts[3]))
-            except Exception:
+                return QColor(
+                    int(parts[0]), int(parts[1]), int(parts[2]), int(parts[3])
+                )
+            except (ValueError, IndexError, TypeError):
                 return QColor(default)
 
-                # Дефолты — исходный вид превью: синие точки, зелёные линии,
+        # Дефолты — исходный вид превью: синие точки, зелёные линии,
+
         # красный контур полигона, розовая заливка.
         self.display_settings = {
-            'point_color': col('point_color', '#005adeff'),
-            'point_size': s.value(pre + 'point_size', 6, type=int),
-            'line_color': col('line_color', '#14a03cff'),
-            'line_width': s.value(pre + 'line_width', 2, type=int),
-            'poly_outline_color': col('poly_outline_color', '#e60000dc'),
-            'poly_outline_width': s.value(pre + 'poly_outline_width', 2, type=int),
-            'poly_fill_color': col('poly_fill_color', '#e6000032'),
-            'num_label_color': col('num_label_color', '#b40000ff'),
-            'num_label_size': s.value(pre + 'num_label_size', 10, type=int),
-            'area_label_color': col('area_label_color', '#003ca0ff'),
-            'area_label_size': s.value(pre + 'area_label_size', 10, type=int),
+            "point_color": col("point_color", "#005adeff"),
+            "point_size": s.value(pre + "point_size", 6, type=int),
+            "line_color": col("line_color", "#14a03cff"),
+            "line_width": s.value(pre + "line_width", 2, type=int),
+            "poly_outline_color": col("poly_outline_color", "#e60000dc"),
+            "poly_outline_width": s.value(pre + "poly_outline_width", 2, type=int),
+            "poly_fill_color": col("poly_fill_color", "#e6000032"),
+            "num_label_color": col("num_label_color", "#b40000ff"),
+            "num_label_size": s.value(pre + "num_label_size", 10, type=int),
+            "area_label_color": col("area_label_color", "#003ca0ff"),
+            "area_label_size": s.value(pre + "area_label_size", 10, type=int),
             # Формат координат и точность.
-            'coord_format': s.value(pre + 'coord_format', 'decimal', type=str),
-            'deg_precision': s.value(pre + 'deg_precision', 8, type=int),
-            'dms_seconds_precision': s.value(pre + 'dms_seconds_precision', 3, type=int),
-            'meters_precision': s.value(pre + 'meters_precision', 3, type=int),
+            "coord_format": s.value(pre + "coord_format", "decimal", type=str),
+            "deg_precision": s.value(pre + "deg_precision", 8, type=int),
+            "dms_seconds_precision": s.value(
+                pre + "dms_seconds_precision", 3, type=int
+            ),
+            "meters_precision": s.value(pre + "meters_precision", 3, type=int),
         }
 
     def _open_display_dialog(self):
@@ -1108,7 +1227,7 @@ class ImportDialog(QDialog):
         в Qt6 (QGIS 4.x) — exec(). Используем совместимую обёртку.
         """
         dlg = DisplaySettingsDialog(self)
-        result = dlg.exec() if hasattr(dlg, 'exec') else dlg.exec_()
+        result = dlg.exec() if hasattr(dlg, "exec") else _exec_dialog(dlg)
         if result:
             self._load_display_settings()
             self._init_map_canvas_colors()
@@ -1126,14 +1245,14 @@ class ImportDialog(QDialog):
         чтобы новый формат (десятичный / ГГММСС) сразу отобразился.
         """
         dlg = PrecisionSettingsDialog(self)
-        result = dlg.exec() if hasattr(dlg, 'exec') else dlg.exec_()
+        result = dlg.exec() if hasattr(dlg, "exec") else _exec_dialog(dlg)
         if result:
             self._load_display_settings()
             if self._is_spatial_input:
                 self._fill_spatial_preview_table()
             elif self.rows:
                 self._fill_preview()
-    
+
     def _init_map_canvas_colors(self):
         """Применяет текущие настройки к резиновым лентам превью.
 
@@ -1142,16 +1261,16 @@ class ImportDialog(QDialog):
         """
         ds = self.display_settings
         try:
-            self.rb_point.setColor(ds['point_color'])
-            self.rb_point.setWidth(ds['point_size'] // 3)  # шаг ~3 px
-            self.rb_line.setColor(ds['line_color'])
-            self.rb_line.setWidth(ds['line_width'])
+            self.rb_point.setColor(ds["point_color"])
+            self.rb_point.setWidth(ds["point_size"] // 3)  # шаг ~3 px
+            self.rb_line.setColor(ds["line_color"])
+            self.rb_line.setWidth(ds["line_width"])
             self.rb_vertex.setColor(QColor(0, 90, 230, 255))
             self.rb_vertex.setWidth(5)
             self.rb_vertex.setIconSize(6)
             self._apply_poly_preview_style()
-        except Exception:
-            pass    
+        except Exception as e:  # noqa: BLE001 — слот не должен ронять плагин
+            _log_ignored_exception(e, "некритичная ошибка")
 
     def _global_qss(self):
         """Возвращает таблицу стилей для окна.
@@ -1213,8 +1332,7 @@ class ImportDialog(QDialog):
     # Построение интерфейса
     # --------------------------------------------------------
     def _build_ui(self):
-        """Собирает все виджеты окна.
-        """
+        """Собирает все виджеты окна."""
         root = QVBoxLayout(self)
         root.setContentsMargins(12, 12, 12, 12)
         root.setSpacing(10)
@@ -1245,7 +1363,7 @@ class ImportDialog(QDialog):
         preview_block = QWidget()
         pb_layout = QVBoxLayout(preview_block)
         pb_layout.setContentsMargins(0, 0, 0, 0)
-        pb_layout.addWidget(QLabel('Просмотр данных:'))
+        pb_layout.addWidget(QLabel("Просмотр данных:"))
         self.preview = QTableWidget()
         self.preview.setContextMenuPolicy(_QT_CUSTOM_CONTEXT_MENU)
         self.preview.customContextMenuRequested.connect(self._on_preview_context_menu)
@@ -1258,7 +1376,7 @@ class ImportDialog(QDialog):
         map_block = QWidget()
         mb_layout = QVBoxLayout(map_block)
         mb_layout.setContentsMargins(0, 0, 0, 0)
-        mb_layout.addWidget(QLabel('Карта:'))
+        mb_layout.addWidget(QLabel("Карта:"))
 
         canvas_holder = QWidget()
         grid = QGridLayout(canvas_holder)
@@ -1272,11 +1390,11 @@ class ImportDialog(QDialog):
         grid.addWidget(self.scale_bar, 0, 0, _QT_ALIGN_LEFT_BOTTOM)
 
         # Индикатор общей площади — в левом верхнем углу карты.
-        self.total_area_label = QLabel('')
+        self.total_area_label = QLabel("")
         self.total_area_label.setStyleSheet(
-            'background: rgba(255, 255, 255, 220); '
-            'border: 1px solid #cccccc; border-radius: 3px; '
-            'padding: 4px 8px; font-weight: bold; color: #222222;'
+            "background: rgba(255, 255, 255, 220); "
+            "border: 1px solid #cccccc; border-radius: 3px; "
+            "padding: 4px 8px; font-weight: bold; color: #222222;"
         )
         self.total_area_label.setVisible(False)
         grid.addWidget(self.total_area_label, 0, 0, _QT_ALIGN_LEFT_TOP)
@@ -1289,9 +1407,9 @@ class ImportDialog(QDialog):
         right_split.setStretchFactor(1, 2)
         right_split.setSizes([400, 300])
 
-          # Порядок: слева предпросмотр (таблица + карта), справа карточки.
-        main_split.addWidget(right_split)   # превью — слева
-        main_split.addWidget(left_scroll)   # карточки — справа
+        # Порядок: слева предпросмотр (таблица + карта), справа карточки.
+        main_split.addWidget(right_split)  # превью — слева
+        main_split.addWidget(left_scroll)  # карточки — справа
         # Растягивается только превью. Карточки держат свою ширину
         # и при сжатии окна не ужимаются первыми.
         main_split.setStretchFactor(0, 1)
@@ -1304,16 +1422,16 @@ class ImportDialog(QDialog):
 
         # ---------- Нижние кнопки ----------
         row_btn = QHBoxLayout()
-        self.btn_clear = QPushButton('Очистить данные')
+        self.btn_clear = QPushButton("Очистить данные")
         self.btn_clear.clicked.connect(self.on_clear)
         row_btn.addWidget(self.btn_clear)
         row_btn.addStretch(1)
 
-        btn_ok = QPushButton('Импортировать')
+        btn_ok = QPushButton("Импортировать")
         btn_ok.clicked.connect(self.on_import)
         row_btn.addWidget(btn_ok)
 
-        btn_cancel = QPushButton('Отмена')
+        btn_cancel = QPushButton("Отмена")
         btn_cancel.clicked.connect(self.reject)
         row_btn.addWidget(btn_cancel)
         root.addLayout(row_btn)
@@ -1323,22 +1441,22 @@ class ImportDialog(QDialog):
     # --------------------------------------------------------
     def _block_source(self):
         """Файл, кнопка «Из буфера», выбор СК и плашка-предупреждение."""
-        box = QGroupBox('Источник данных')
+        box = QGroupBox("Источник данных")
         lay = QVBoxLayout(box)
 
         # Файл: поле тянется по ширине, кнопки фиксированы.
         row_file = QHBoxLayout()
-        row_file.addWidget(QLabel('Файл:'))
+        row_file.addWidget(QLabel("Файл:"))
         self.file_edit = QLineEdit()
         self.file_edit.setAcceptDrops(False)
-        self.file_edit.setPlaceholderText('Перетащите файл или нажмите «...»')
+        self.file_edit.setPlaceholderText("Перетащите файл или нажмите «...»")
         self.file_edit.setMinimumWidth(80)
         row_file.addWidget(self.file_edit, 1)
-        btn_browse = QPushButton('...')
+        btn_browse = QPushButton("...")
         btn_browse.setFixedWidth(32)
         btn_browse.clicked.connect(self.on_browse)
         row_file.addWidget(btn_browse)
-        btn_clip = QPushButton('Из буфера')
+        btn_clip = QPushButton("Из буфера")
         btn_clip.setMinimumWidth(90)
         btn_clip.clicked.connect(self.on_clipboard)
         row_file.addWidget(btn_clip)
@@ -1346,13 +1464,13 @@ class ImportDialog(QDialog):
 
         # Исходная СК во фрейме для подсветки, растягивается по ширине.
         row_crs = QHBoxLayout()
-        row_crs.addWidget(QLabel('Исходная СК:'))
+        row_crs.addWidget(QLabel("Исходная СК:"))
         self.crs_frame = QFrame()
-        self.crs_frame.setObjectName('crs_frame')
+        self.crs_frame.setObjectName("crs_frame")
         f_layout = QHBoxLayout(self.crs_frame)
         f_layout.setContentsMargins(0, 0, 0, 0)
         self.crs_widget = QgsProjectionSelectionWidget()
-        self.crs_widget.setCrs(QgsCoordinateReferenceSystem('EPSG:4326'))
+        self.crs_widget.setCrs(QgsCoordinateReferenceSystem("EPSG:4326"))
         self.crs_widget.setMinimumWidth(80)
         self.crs_widget.crsChanged.connect(self._on_crs_changed)
         f_layout.addWidget(self.crs_widget)
@@ -1360,8 +1478,8 @@ class ImportDialog(QDialog):
         lay.addLayout(row_crs)
 
         # Inline-плашка про СК. Скрыта по умолчанию.
-        self.crs_warning = QLabel('')
-        self.crs_warning.setObjectName('warning_label')
+        self.crs_warning = QLabel("")
+        self.crs_warning.setObjectName("warning_label")
         self.crs_warning.setWordWrap(True)
         self.crs_warning.setVisible(False)
         lay.addWidget(self.crs_warning)
@@ -1381,23 +1499,22 @@ class ImportDialog(QDialog):
                пользователь сначала видит параметры разбора, а потом
                уже привязку колонок.
         """
-        box = QGroupBox('Структура')
+        box = QGroupBox("Структура")
         lay = QVBoxLayout(box)
 
-                # --- 1. Формат + Заголовки + Нач./Кон. строка — одной строкой ---
+        # --- 1. Формат + Заголовки + Нач./Кон. строка — одной строкой ---
         row_fmt = QHBoxLayout()
-        self.format_label = QLabel('Формат: —')
+        self.format_label = QLabel("Формат: —")
         row_fmt.addWidget(self.format_label)
 
         row_fmt.addSpacing(15)
-        self.headers_label = QLabel('Заголовки: —')
-        self.headers_label.setObjectName('hint_label')
+        self.headers_label = QLabel("Заголовки: —")
+        self.headers_label.setObjectName("hint_label")
         row_fmt.addWidget(self.headers_label)
 
         row_fmt.addSpacing(10)
-        self.end_label = QLabel('Кон. строка:')
-        row_fmt.addWidget(self.end_label)
-        self.end_line = QSpinBox()
+        self.start_label = QLabel("Нач. строка:")
+        row_fmt.addWidget(self.start_label)
         self.start_line = QSpinBox()
         self.start_line.setMinimum(1)
         self.start_line.setValue(1)
@@ -1406,35 +1523,36 @@ class ImportDialog(QDialog):
         row_fmt.addWidget(self.start_line)
 
         row_fmt.addSpacing(10)
-        row_fmt.addWidget(QLabel('Кон. строка:'))
+        self.end_label = QLabel("Кон. строка:")
+        row_fmt.addWidget(self.end_label)
         self.end_line = QSpinBox()
         self.end_line.setMinimum(0)
         self.end_line.setValue(0)
         self.end_line.setMaximumWidth(70)
         self.end_line.valueChanged.connect(self._rebuild_from_raw)
         row_fmt.addWidget(self.end_line)
-        self.end_hint_label = QLabel('(0 = до конца)')
+        self.end_hint_label = QLabel("(0 = до конца)")
         row_fmt.addWidget(self.end_hint_label)
         row_fmt.addStretch(1)
 
         # Кнопка-шестерёнка: настройки формата и точности координат.
-        self.btn_precision = QPushButton('⚙')
+        self.btn_precision = QPushButton("⚙")
         self.btn_precision.setFixedWidth(32)
-        self.btn_precision.setToolTip('Формат и точность координат')
+        self.btn_precision.setToolTip("Формат и точность координат")
         self.btn_precision.clicked.connect(self._open_precision_dialog)
         row_fmt.addWidget(self.btn_precision)
         lay.addLayout(row_fmt)
 
         # --- 2. Кодировка + Разделитель + Порядок ---
         row_kd = QHBoxLayout()
-        self.enc_label = QLabel('Кодировка:')
+        self.enc_label = QLabel("Кодировка:")
         row_kd.addWidget(self.enc_label)
         self.enc = QComboBox()
         self.enc.addItems(ENCODINGS)
         row_kd.addWidget(self.enc)
 
         row_kd.addSpacing(15)
-        self.delim_label = QLabel('Разделитель:')
+        self.delim_label = QLabel("Разделитель:")
         row_kd.addWidget(self.delim_label)
         self.delim = QComboBox()
         self.delim.addItems(list(DELIMS.keys()))
@@ -1442,7 +1560,7 @@ class ImportDialog(QDialog):
         row_kd.addWidget(self.delim)
 
         row_kd.addSpacing(15)
-        self.order_label = QLabel('Порядок:')
+        self.order_label = QLabel("Порядок:")
         row_kd.addWidget(self.order_label)
         self.order_combo = QComboBox()
         self.order_combo.addItems(ORDERS)
@@ -1452,7 +1570,7 @@ class ImportDialog(QDialog):
         # Оси — тот же смысл, что Порядок, но для метров.
         # Стоит рядом, чтобы переключатель не «прыгал» при смене СК.
         row_kd.addSpacing(15)
-        self.axes_label = QLabel('Оси:')
+        self.axes_label = QLabel("Оси:")
         row_kd.addWidget(self.axes_label)
         self.axes_combo = QComboBox()
         self.axes_combo.addItems(AXES)
@@ -1469,34 +1587,32 @@ class ImportDialog(QDialog):
         self.coord_stack.addWidget(self._page_hms_three())
         lay.addWidget(self.coord_stack)
 
-                # --- 3. Нумерация вершин ---
+        # --- 3. Нумерация вершин ---
         row_vnum = QHBoxLayout()
-        self.vnum_mode_label = QLabel('Нумерация вершин:')
+        self.vnum_mode_label = QLabel("Нумерация вершин:")
         row_vnum.addWidget(self.vnum_mode_label)
 
         self.vnum_mode_combo = QComboBox()
-        self.vnum_mode_combo.addItems([
-            'Авто (по объектам)',
-            'Авто (сквозная)',
-            'Из колонки'
-        ])
+        self.vnum_mode_combo.addItems(
+            ["Авто (по объектам)", "Авто (сквозная)", "Из колонки"]
+        )
         self.vnum_mode_combo.currentIndexChanged.connect(self._on_vnum_mode_changed)
         row_vnum.addWidget(self.vnum_mode_combo)
 
-        self.vnum_col_label = QLabel('Колонка:')
+        self.vnum_col_label = QLabel("Колонка:")
         self.vnum_col_label.setVisible(False)
         row_vnum.addWidget(self.vnum_col_label)
 
         self.vnum_col_combo = QComboBox()
-        self.vnum_col_combo.addItem('—')
+        self.vnum_col_combo.addItem("—")
         self.vnum_col_combo.setVisible(False)
         row_vnum.addWidget(self.vnum_col_combo)
 
         row_vnum.addStretch(1)
         lay.addLayout(row_vnum)
 
-        self.vnum_warning = QLabel('')
-        self.vnum_warning.setObjectName('warning_label')
+        self.vnum_warning = QLabel("")
+        self.vnum_warning.setObjectName("warning_label")
         self.vnum_warning.setWordWrap(True)
         self.vnum_warning.setVisible(False)
         lay.addWidget(self.vnum_warning)
@@ -1508,18 +1624,18 @@ class ImportDialog(QDialog):
     # --------------------------------------------------------
     def _block_geometry(self):
         """Тип геометрии, стиль полигона, чекбоксы вершин и нумерации."""
-        box = QGroupBox('Геометрия')
+        box = QGroupBox("Геометрия")
         lay = QVBoxLayout(box)
 
         row = QHBoxLayout()
-        row.addWidget(QLabel('Геометрия:'))
+        row.addWidget(QLabel("Геометрия:"))
         self.geom_combo = QComboBox()
         self.geom_combo.addItems(GEOMS)
         self.geom_combo.currentIndexChanged.connect(self._on_geom_changed)
         row.addWidget(self.geom_combo)
 
         row.addSpacing(15)
-        self.poly_style_label = QLabel('Стиль:')
+        self.poly_style_label = QLabel("Стиль:")
         row.addWidget(self.poly_style_label)
         self.poly_style = QComboBox()
         self.poly_style.addItems(POLY_STYLES)
@@ -1531,21 +1647,21 @@ class ImportDialog(QDialog):
         row.addStretch(1)
 
         # Кнопка-шестерёнка — открывает диалог настроек отображения.
-        self.btn_display = QPushButton('⚙')
+        self.btn_display = QPushButton("⚙")
         self.btn_display.setFixedWidth(32)
-        self.btn_display.setToolTip('Настройки отображения')
+        self.btn_display.setToolTip("Настройки отображения")
         self.btn_display.clicked.connect(self._open_display_dialog)
         row.addWidget(self.btn_display)
 
         lay.addLayout(row)
 
         row2 = QHBoxLayout()
-        self.cb_vertices = QCheckBox('Точки по углам')
+        self.cb_vertices = QCheckBox("Точки по углам")
         self.cb_vertices.stateChanged.connect(self._on_preview_option_changed)
         row2.addWidget(self.cb_vertices)
 
         row2.addSpacing(15)
-        self.cb_numbering = QCheckBox('Нумерация точек и углов')
+        self.cb_numbering = QCheckBox("Нумерация точек и углов")
         self.cb_numbering.stateChanged.connect(self._on_preview_option_changed)
         row2.addWidget(self.cb_numbering)
         row2.addStretch(1)
@@ -1558,36 +1674,36 @@ class ImportDialog(QDialog):
     # --------------------------------------------------------
     def _block_result(self):
         """Имя слоя и опция сохранения в GeoPackage + плашка про имя."""
-        box = QGroupBox('Результат')
+        box = QGroupBox("Результат")
         lay = QVBoxLayout(box)
 
         row_name = QHBoxLayout()
-        row_name.addWidget(QLabel('Имя слоя:'))
+        row_name.addWidget(QLabel("Имя слоя:"))
         self.layer_name_edit = QLineEdit()
-        self.layer_name_edit.setPlaceholderText('Например: точки_съёмки')
+        self.layer_name_edit.setPlaceholderText("Например: точки_съёмки")
         self.layer_name_edit.textChanged.connect(self._on_layer_name_changed)
         row_name.addWidget(self.layer_name_edit, 1)
         lay.addLayout(row_name)
 
         # Inline-плашка про имя. Скрыта по умолчанию.
-        self.name_warning = QLabel('Введите имя слоя — без него импорт невозможен.')
-        self.name_warning.setObjectName('warning_label')
+        self.name_warning = QLabel("Введите имя слоя — без него импорт невозможен.")
+        self.name_warning.setObjectName("warning_label")
         self.name_warning.setWordWrap(True)
         self.name_warning.setVisible(False)
         lay.addWidget(self.name_warning)
 
         row_save = QHBoxLayout()
-        self.cb_save_file = QCheckBox('Сохранить в файл (GeoPackage):')
+        self.cb_save_file = QCheckBox("Сохранить в файл (GeoPackage):")
         row_save.addWidget(self.cb_save_file)
         row_save.addStretch(1)
         lay.addLayout(row_save)
 
         row_path = QHBoxLayout()
         self.save_path_edit = QLineEdit()
-        self.save_path_edit.setPlaceholderText('Путь к .gpkg')
+        self.save_path_edit.setPlaceholderText("Путь к .gpkg")
         self.save_path_edit.setMinimumWidth(80)
         row_path.addWidget(self.save_path_edit, 1)
-        btn_save_browse = QPushButton('...')
+        btn_save_browse = QPushButton("...")
         btn_save_browse.setFixedWidth(32)
         btn_save_browse.clicked.connect(self.on_browse_save)
         row_path.addWidget(btn_save_browse)
@@ -1597,11 +1713,19 @@ class ImportDialog(QDialog):
 
     def _connect_column_signals(self):
         """Подписывает выпадашки колонок на пересборку превью."""
-        combos = [self.x_combo, self.y_combo,
-                  self.c1_combo, self.c2_combo,
-                  self.c1d, self.c1m, self.c1s,
-                  self.c2d, self.c2m, self.c2s,
-                  self.vnum_col_combo]
+        combos = [
+            self.x_combo,
+            self.y_combo,
+            self.c1_combo,
+            self.c2_combo,
+            self.c1d,
+            self.c1m,
+            self.c1s,
+            self.c2d,
+            self.c2m,
+            self.c2s,
+            self.vnum_col_combo,
+        ]
         for c in combos:
             c.currentIndexChanged.connect(self._on_column_changed)
 
@@ -1618,7 +1742,7 @@ class ImportDialog(QDialog):
     def _on_vnum_mode_changed(self):
         """Показывает/прячет выбор колонки и обновляет таблицу."""
         mode = self.vnum_mode_combo.currentText()
-        is_col = (mode == 'Из колонки')
+        is_col = mode == "Из колонки"
         self.vnum_col_label.setVisible(is_col)
         self.vnum_col_combo.setVisible(is_col)
         self.vnum_warning.setVisible(False)
@@ -1633,14 +1757,14 @@ class ImportDialog(QDialog):
         «Из колонки» выбран, но колонка не указана или содержит пустые
         значения. В этом случае показывает жёлтую плашку.
         """
-        if self.vnum_mode_combo.currentText() != 'Из колонки':
+        if self.vnum_mode_combo.currentText() != "Из колонки":
             self.vnum_warning.setVisible(False)
             return True
 
         col_idx = self._col_index(self.vnum_col_combo)
         if col_idx < 0:
             self.vnum_warning.setText(
-                'Выбран режим «Из колонки», но колонка не указана.'
+                "Выбран режим «Из колонки», но колонка не указана."
             )
             self.vnum_warning.setVisible(True)
             return False
@@ -1657,8 +1781,8 @@ class ImportDialog(QDialog):
 
         if empty_found:
             self.vnum_warning.setText(
-                'В выбранной колонке есть пустые значения. '
-                'Выберите другую колонку или режим.'
+                "В выбранной колонке есть пустые значения. "
+                "Выберите другую колонку или режим."
             )
             self.vnum_warning.setVisible(True)
             return False
@@ -1669,15 +1793,15 @@ class ImportDialog(QDialog):
     def _get_vertex_number(self, row, local_vnum, global_vnum):
         """Возвращает строковый номер вершины по текущему режиму."""
         mode = self.vnum_mode_combo.currentText()
-        if mode == 'Авто (по объектам)':
+        if mode == "Авто (по объектам)":
             return str(local_vnum)
-        elif mode == 'Авто (сквозная)':
+        elif mode == "Авто (сквозная)":
             return str(global_vnum)
         else:
             col_idx = self._col_index(self.vnum_col_combo)
             if col_idx >= 0:
                 return self._cell(row, col_idx).strip()
-            return ''       
+            return ""
 
     def _on_preview_option_changed(self):
         """Переключение стиля/чекбоксов обновляет превью-карту."""
@@ -1701,25 +1825,25 @@ class ImportDialog(QDialog):
         self._clear_crs_error()
         try:
             self.map_canvas.setDestinationCrs(self.crs_widget.crs())
-        except Exception:
-            pass
+        except Exception as e:  # noqa: BLE001 — слот не должен ронять плагин
+            _log_ignored_exception(e, "некритичная ошибка")
         self._update_crs_warning()
         self._update_map_preview()
 
     def _on_layer_name_changed(self):
         """Ввод в поле имени: убрать красную подсветку и жёлтую плашку."""
-        self.layer_name_edit.setStyleSheet('')
+        self.layer_name_edit.setStyleSheet("")
         if self.layer_name_edit.text().strip():
             self.name_warning.setVisible(False)
             self._name_warn_shown = False
 
     def _clear_layer_name_error(self):
         """Снимает красную подсветку с поля имени слоя."""
-        self.layer_name_edit.setStyleSheet('')
+        self.layer_name_edit.setStyleSheet("")
 
     def _clear_crs_error(self):
         """Снимает красную подсветку с блока выбора СК."""
-        self.crs_frame.setStyleSheet('')
+        self.crs_frame.setStyleSheet("")
 
     # --------------------------------------------------------
     # Плашки-предупреждения (inline)
@@ -1742,15 +1866,18 @@ class ImportDialog(QDialog):
 
         units = self._current_units()
         mismatch = False
-        if units == 'degrees' and not crs.isGeographic():
-            mismatch = True
-        elif units == 'meters' and crs.isGeographic():
+        if (
+            units == "degrees"
+            and not crs.isGeographic()
+            or units == "meters"
+            and crs.isGeographic()
+        ):
             mismatch = True
 
         if mismatch:
             self.crs_warning.setText(
-                '⚠ Внимание: данные и выбранная СК не согласованы по единицам.\n'
-                'Возможно, выбрана неверная исходная СК. Проверьте выбор.'
+                "⚠ Внимание: данные и выбранная СК не согласованы по единицам.\n"
+                "Возможно, выбрана неверная исходная СК. Проверьте выбор."
             )
             self.crs_warning.setVisible(True)
         else:
@@ -1777,23 +1904,33 @@ class ImportDialog(QDialog):
         # --- Прячем текстовые опции ---
         try:
             for w in (
-                self.format_label, self.headers_label,
-                self.start_label, self.start_line,
-                self.end_label, self.end_line, self.end_hint_label,
-                self.enc_label, self.enc,
-                self.delim_label, self.delim,
-                self.order_label, self.order_combo,
-                self.axes_label, self.axes_combo,
+                self.format_label,
+                self.headers_label,
+                self.start_label,
+                self.start_line,
+                self.end_label,
+                self.end_line,
+                self.end_hint_label,
+                self.enc_label,
+                self.enc,
+                self.delim_label,
+                self.delim,
+                self.order_label,
+                self.order_combo,
+                self.axes_label,
+                self.axes_combo,
                 self.coord_stack,
-                self.vnum_mode_label, self.vnum_mode_combo,
-                self.vnum_col_label, self.vnum_col_combo,
+                self.vnum_mode_label,
+                self.vnum_mode_combo,
+                self.vnum_col_label,
+                self.vnum_col_combo,
                 self.vnum_warning,
                 self.btn_precision,
             ):
                 if w is not None:
                     w.setVisible(not is_spatial)
-        except Exception:
-            pass
+        except Exception as e:  # noqa: BLE001 — слот не должен ронять плагин
+            _log_ignored_exception(e, "некритичная ошибка")
 
         if not is_spatial:
             self._on_vnum_mode_changed()
@@ -1808,8 +1945,8 @@ class ImportDialog(QDialog):
         # --- Стиль и чекбоксы ---
         if is_spatial:
             has_poly = any(
-                p['wkb'] == QgsWkbTypes.Polygon or
-                p['wkb'] == QgsWkbTypes.MultiPolygon
+                p["wkb"] == _QgsWkbTypesType_Polygon
+                or p["wkb"] == _QgsWkbTypesType_MultiPolygon
                 for p in self.spatial_data
             )
             self.poly_style_label.setVisible(has_poly)
@@ -1818,8 +1955,8 @@ class ImportDialog(QDialog):
             self.cb_numbering.setVisible(True)
         else:
             geom = self.geom_combo.currentText()
-            is_point = (geom == 'Точка')
-            show_poly = geom in ('Полигон', 'Многоконтурный полигон')
+            is_point = geom == "Точка"
+            show_poly = geom in ("Полигон", "Многоконтурный полигон")
             self.poly_style_label.setVisible(show_poly)
             self.poly_style.setVisible(show_poly)
             self.cb_vertices.setVisible(not is_point)
@@ -1834,8 +1971,8 @@ class ImportDialog(QDialog):
         units = self._current_units()
         is_hms = self.detected_format in (FMT_HMS_ONE, FMT_HMS_THREE)
 
-        show_order = is_hms or (units == 'degrees')
-        show_axes = (units == 'meters') and (self.detected_format == FMT_DECIMAL)
+        show_order = is_hms or (units == "degrees")
+        show_axes = (units == "meters") and (self.detected_format == FMT_DECIMAL)
 
         self.order_label.setVisible(show_order)
         self.order_combo.setVisible(show_order)
@@ -1845,16 +1982,16 @@ class ImportDialog(QDialog):
     def _axis_labels(self):
         """Возвращает две подписи координат в порядке колонок."""
         units = self._current_units()
-        if units == 'degrees':
-            if self.order_combo.currentText().startswith('Широта'):
-                return ['Широта', 'Долгота']
+        if units == "degrees":
+            if self.order_combo.currentText().startswith("Широта"):
+                return ["Широта", "Долгота"]
             else:
-                return ['Долгота', 'Широта']
+                return ["Долгота", "Широта"]
         else:
-            if self.axes_combo.currentText().startswith('Восток'):
-                return ['Восток', 'Север']
+            if self.axes_combo.currentText().startswith("Восток"):
+                return ["Восток", "Север"]
             else:
-                return ['Север', 'Восток']
+                return ["Север", "Восток"]
 
     def _update_axis_labels(self):
         """Обновляет подписи всех полей координат.
@@ -1867,14 +2004,14 @@ class ImportDialog(QDialog):
         """
         labels = self._axis_labels()
         # Десятичные (метры или градусы).
-        self.x_label.setText(labels[0] + ':')
-        self.y_label.setText(labels[1] + ':')
+        self.x_label.setText(labels[0] + ":")
+        self.y_label.setText(labels[1] + ":")
         # ГМС в одной колонке.
-        self.c1_label.setText(labels[0] + ':')
-        self.c2_label.setText(labels[1] + ':')
+        self.c1_label.setText(labels[0] + ":")
+        self.c2_label.setText(labels[1] + ":")
         # ГМС в трёх колонках.
-        self.c1h_label.setText(labels[0] + ':')
-        self.c2h_label.setText(labels[1] + ':')
+        self.c1h_label.setText(labels[0] + ":")
+        self.c2h_label.setText(labels[1] + ":")
 
     def _fmt_value(self, v):
         """Форматирует координату для показа в таблице.
@@ -1890,16 +2027,16 @@ class ImportDialog(QDialog):
         ds = self.display_settings
         units = self._current_units()
 
-        if units == 'degrees':
-            fmt = ds.get('coord_format', 'decimal')
-            if fmt == 'dms':
-                sec_prec = ds.get('dms_seconds_precision', 3)
+        if units == "degrees":
+            fmt = ds.get("coord_format", "decimal")
+            if fmt == "dms":
+                sec_prec = ds.get("dms_seconds_precision", 3)
                 return self._to_dms(v, sec_prec)
-            prec = ds.get('deg_precision', 8)
-            return f'{v:.{prec}f}'
+            prec = ds.get("deg_precision", 8)
+            return f"{v:.{prec}f}"
 
-        prec = ds.get('meters_precision', 3)
-        return f'{v:.{prec}f}'
+        prec = ds.get("meters_precision", 3)
+        return f"{v:.{prec}f}"
 
     def _to_dms(self, v, sec_prec=3):
         """Переводит десятичные градусы в формат ГГ°ММ'СС.ссс".
@@ -1922,7 +2059,7 @@ class ImportDialog(QDialog):
         превращаются в 60.000, они переносятся в минуты; если минуты
         становятся 60 — в градусы. Иначе получилось бы «45°12'60.000"».
         """
-        sign = '-' if v < 0 else ''
+        sign = "-" if v < 0 else ""
         v = abs(v)
 
         deg = int(v)
@@ -1942,9 +2079,9 @@ class ImportDialog(QDialog):
         # Форматируем секунды с ведущим нулём.
         # Общая ширина: 2 знака до запятой + 1 точка + sec_prec после.
         width = 3 + sec_prec
-        sec_str = f'{seconds:0{width}.{sec_prec}f}'
+        sec_str = f"{seconds:0{width}.{sec_prec}f}"
 
-        return f'{sign}{deg}°{minutes:02d}\'{sec_str}"'
+        return f"{sign}{deg}°{minutes:02d}'{sec_str}\""
 
     # --------------------------------------------------------
     # Страницы QStackedWidget — по одной на формат координат
@@ -1954,8 +2091,8 @@ class ImportDialog(QDialog):
         w = QWidget()
         h = QHBoxLayout(w)
         h.setContentsMargins(0, 0, 0, 0)
-        self.x_combo, self.x_label = self._add_col_combo(h, 'Север:')
-        self.y_combo, self.y_label = self._add_col_combo(h, 'Восток:')
+        self.x_combo, self.x_label = self._add_col_combo(h, "Север:")
+        self.y_combo, self.y_label = self._add_col_combo(h, "Восток:")
         h.addStretch(1)
         return w
 
@@ -1969,8 +2106,8 @@ class ImportDialog(QDialog):
         w = QWidget()
         h = QHBoxLayout(w)
         h.setContentsMargins(0, 0, 0, 0)
-        self.c1_combo, self.c1_label = self._add_col_combo(h, 'Широта:')
-        self.c2_combo, self.c2_label = self._add_col_combo(h, 'Долгота:')
+        self.c1_combo, self.c1_label = self._add_col_combo(h, "Широта:")
+        self.c2_combo, self.c2_label = self._add_col_combo(h, "Долгота:")
         h.addStretch(1)
         return w
 
@@ -1985,24 +2122,24 @@ class ImportDialog(QDialog):
         h = QHBoxLayout(w)
         h.setContentsMargins(0, 0, 0, 0)
 
-        self.c1h_label = QLabel('Широта:')
+        self.c1h_label = QLabel("Широта:")
         h.addWidget(self.c1h_label)
-        self.c1d, _ = self._add_col_combo(h, '')
-        h.addWidget(QLabel('°'))
-        self.c1m, _ = self._add_col_combo(h, '')
+        self.c1d, _ = self._add_col_combo(h, "")
+        h.addWidget(QLabel("°"))
+        self.c1m, _ = self._add_col_combo(h, "")
         h.addWidget(QLabel("'"))
-        self.c1s, _ = self._add_col_combo(h, '')
+        self.c1s, _ = self._add_col_combo(h, "")
         h.addWidget(QLabel('"'))
 
         h.addSpacing(15)
 
-        self.c2h_label = QLabel('Долгота:')
+        self.c2h_label = QLabel("Долгота:")
         h.addWidget(self.c2h_label)
-        self.c2d, _ = self._add_col_combo(h, '')
-        h.addWidget(QLabel('°'))
-        self.c2m, _ = self._add_col_combo(h, '')
+        self.c2d, _ = self._add_col_combo(h, "")
+        h.addWidget(QLabel("°"))
+        self.c2m, _ = self._add_col_combo(h, "")
         h.addWidget(QLabel("'"))
-        self.c2s, _ = self._add_col_combo(h, '')
+        self.c2s, _ = self._add_col_combo(h, "")
         h.addWidget(QLabel('"'))
 
         h.addStretch(1)
@@ -2013,7 +2150,7 @@ class ImportDialog(QDialog):
         lbl = QLabel(label)
         layout.addWidget(lbl)
         combo = QComboBox()
-        combo.addItem('—')
+        combo.addItem("—")
         combo.setSizeAdjustPolicy(COL_COMBO_POLICY)
         combo.setMinimumContentsLength(COL_COMBO_MIN_CHARS)
         combo.setMaximumWidth(200)
@@ -2031,84 +2168,86 @@ class ImportDialog(QDialog):
         """
         s = QgsSettings()
         try:
-            v = s.value(SETTINGS_PREFIX + 'delim', 'авто', type=str)
+            v = s.value(SETTINGS_PREFIX + "delim", "авто", type=str)
             i = self.delim.findText(v)
             if i >= 0:
                 self.delim.setCurrentIndex(i)
 
-            v = s.value(SETTINGS_PREFIX + 'encoding', 'UTF-8', type=str)
+            v = s.value(SETTINGS_PREFIX + "encoding", "UTF-8", type=str)
             i = self.enc.findText(v)
             if i >= 0:
                 self.enc.setCurrentIndex(i)
 
-            v = s.value(SETTINGS_PREFIX + 'geometry', 'Точка', type=str)
+            v = s.value(SETTINGS_PREFIX + "geometry", "Точка", type=str)
             i = self.geom_combo.findText(v)
             if i >= 0:
                 self.geom_combo.setCurrentIndex(i)
 
-            authid = s.value(SETTINGS_PREFIX + 'crs', 'EPSG:4326', type=str)
+            authid = s.value(SETTINGS_PREFIX + "crs", "EPSG:4326", type=str)
             crs = QgsCoordinateReferenceSystem(authid)
             if crs.isValid():
                 self.crs_widget.setCrs(crs)
 
-            v = s.value(SETTINGS_PREFIX + 'poly_style', 'Контур', type=str)
+            v = s.value(SETTINGS_PREFIX + "poly_style", "Контур", type=str)
             i = self.poly_style.findText(v)
             if i >= 0:
                 self.poly_style.setCurrentIndex(i)
 
-            v = s.value(SETTINGS_PREFIX + 'order', ORDERS[0], type=str)
+            v = s.value(SETTINGS_PREFIX + "order", ORDERS[0], type=str)
             i = self.order_combo.findText(v)
             if i >= 0:
                 self.order_combo.setCurrentIndex(i)
 
-            v = s.value(SETTINGS_PREFIX + 'axes', AXES[0], type=str)
+            v = s.value(SETTINGS_PREFIX + "axes", AXES[0], type=str)
             i = self.axes_combo.findText(v)
             if i >= 0:
                 self.axes_combo.setCurrentIndex(i)
 
             self.cb_numbering.setChecked(
-                s.value(SETTINGS_PREFIX + 'numbering', False, type=bool))
+                s.value(SETTINGS_PREFIX + "numbering", False, type=bool)
+            )
             self.cb_vertices.setChecked(
-                s.value(SETTINGS_PREFIX + 'vertices', False, type=bool))
+                s.value(SETTINGS_PREFIX + "vertices", False, type=bool)
+            )
 
             self.save_path_edit.setText(
-                s.value(SETTINGS_PREFIX + 'save_path', '', type=str))
+                s.value(SETTINGS_PREFIX + "save_path", "", type=str)
+            )
             self.cb_save_file.setChecked(
-                s.value(SETTINGS_PREFIX + 'save_enabled', False, type=bool))
-            
-            v = s.value(SETTINGS_PREFIX + 'vnum_mode',
-                        'Авто (по объектам)', type=str)
+                s.value(SETTINGS_PREFIX + "save_enabled", False, type=bool)
+            )
+
+            v = s.value(SETTINGS_PREFIX + "vnum_mode", "Авто (по объектам)", type=str)
             i = self.vnum_mode_combo.findText(v)
             if i >= 0:
                 self.vnum_mode_combo.setCurrentIndex(i)
 
-            self._saved_vnum_col = s.value(
-                SETTINGS_PREFIX + 'vnum_col', '', type=str)    
-        
-        except Exception:
-            pass
+            self._saved_vnum_col = s.value(SETTINGS_PREFIX + "vnum_col", "", type=str)
+
+        except Exception as e:  # noqa: BLE001 — слот не должен ронять плагин
+            _log_ignored_exception(e, "некритичная ошибка")
 
     def _save_settings(self):
         """Сохраняет текущие значения полей в QgsSettings."""
         s = QgsSettings()
         try:
-            s.setValue(SETTINGS_PREFIX + 'delim', self.delim.currentText())
-            s.setValue(SETTINGS_PREFIX + 'encoding', self.enc.currentText())
-            s.setValue(SETTINGS_PREFIX + 'geometry', self.geom_combo.currentText())
-            s.setValue(SETTINGS_PREFIX + 'crs', self.crs_widget.crs().authid())
-            s.setValue(SETTINGS_PREFIX + 'poly_style', self.poly_style.currentText())
-            s.setValue(SETTINGS_PREFIX + 'order', self.order_combo.currentText())
-            s.setValue(SETTINGS_PREFIX + 'axes', self.axes_combo.currentText())
-            s.setValue(SETTINGS_PREFIX + 'numbering', self.cb_numbering.isChecked())
-            s.setValue(SETTINGS_PREFIX + 'vertices', self.cb_vertices.isChecked())
-            s.setValue(SETTINGS_PREFIX + 'save_path', self.save_path_edit.text())
-            s.setValue(SETTINGS_PREFIX + 'save_enabled', self.cb_save_file.isChecked())
-            s.setValue(SETTINGS_PREFIX + 'vnum_mode',
-                       self.vnum_mode_combo.currentText())
-            s.setValue(SETTINGS_PREFIX + 'vnum_col',
-                       self.vnum_col_combo.currentText())
-        except Exception:
-            pass
+            s.setValue(SETTINGS_PREFIX + "delim", self.delim.currentText())
+            s.setValue(SETTINGS_PREFIX + "encoding", self.enc.currentText())
+            s.setValue(SETTINGS_PREFIX + "geometry", self.geom_combo.currentText())
+            s.setValue(SETTINGS_PREFIX + "crs", self.crs_widget.crs().authid())
+            s.setValue(SETTINGS_PREFIX + "poly_style", self.poly_style.currentText())
+            s.setValue(SETTINGS_PREFIX + "order", self.order_combo.currentText())
+            s.setValue(SETTINGS_PREFIX + "axes", self.axes_combo.currentText())
+            s.setValue(SETTINGS_PREFIX + "numbering", self.cb_numbering.isChecked())
+            s.setValue(SETTINGS_PREFIX + "vertices", self.cb_vertices.isChecked())
+            s.setValue(SETTINGS_PREFIX + "save_path", self.save_path_edit.text())
+            s.setValue(SETTINGS_PREFIX + "save_enabled", self.cb_save_file.isChecked())
+            s.setValue(
+                SETTINGS_PREFIX + "vnum_mode", self.vnum_mode_combo.currentText()
+            )
+            s.setValue(SETTINGS_PREFIX + "vnum_col", self.vnum_col_combo.currentText())
+        except Exception as e:  # noqa: BLE001 — слот не должен ронять плагин
+            _log_ignored_exception(e, "некритичная ошибка")
 
     def done(self, result):
         """Перехват закрытия окна.
@@ -2133,17 +2272,17 @@ class ImportDialog(QDialog):
         self.map_canvas.setCanvasColor(QColor(255, 255, 255))
         try:
             self.map_canvas.enableAntiAliasing(True)
-        except Exception:
-            pass
+        except Exception as e:  # noqa: BLE001 — слот не должен ронять плагин
+            _log_ignored_exception(e, "некритичная ошибка")
         try:
             self.map_canvas.setDestinationCrs(self.crs_widget.crs())
-        except Exception:
-            pass
+        except Exception as e:  # noqa: BLE001 — слот не должен ронять плагин
+            _log_ignored_exception(e, "некритичная ошибка")
 
-        self.rb_point = QgsRubberBand(self.map_canvas, QgsWkbTypes.PointGeometry)
-        self.rb_line = QgsRubberBand(self.map_canvas, QgsWkbTypes.LineGeometry)
-        self.rb_poly = QgsRubberBand(self.map_canvas, QgsWkbTypes.PolygonGeometry)
-        self.rb_vertex = QgsRubberBand(self.map_canvas, QgsWkbTypes.PointGeometry)
+        self.rb_point = QgsRubberBand(self.map_canvas, _QgsWkbTypesGeom_Point)
+        self.rb_line = QgsRubberBand(self.map_canvas, _QgsWkbTypesGeom_Line)
+        self.rb_poly = QgsRubberBand(self.map_canvas, _QgsWkbTypesGeom_Polygon)
+        self.rb_vertex = QgsRubberBand(self.map_canvas, _QgsWkbTypesGeom_Point)
 
         self.rb_point.setColor(QColor(0, 90, 230, 255))
         self.rb_line.setColor(QColor(20, 160, 60, 255))
@@ -2158,12 +2297,12 @@ class ImportDialog(QDialog):
     def _clear_rubber(self):
         """Стирает всё нарисованное на превью-карте."""
         try:
-            self.rb_point.reset(QgsWkbTypes.PointGeometry)
-            self.rb_line.reset(QgsWkbTypes.LineGeometry)
-            self.rb_poly.reset(QgsWkbTypes.PolygonGeometry)
-            self.rb_vertex.reset(QgsWkbTypes.PointGeometry)
-        except Exception:
-            pass
+            self.rb_point.reset(_QgsWkbTypesGeom_Point)
+            self.rb_line.reset(_QgsWkbTypesGeom_Line)
+            self.rb_poly.reset(_QgsWkbTypesGeom_Polygon)
+            self.rb_vertex.reset(_QgsWkbTypesGeom_Point)
+        except Exception as e:  # noqa: BLE001 — слот не должен ронять плагин
+            _log_ignored_exception(e, "некритичная ошибка")
 
     def _clear_temp_layer(self):
         """Убирает все временные слои превью с карты.
@@ -2175,8 +2314,8 @@ class ImportDialog(QDialog):
         self._preview_layers = []
         try:
             self.map_canvas.setLayers([])
-        except Exception:
-            pass
+        except Exception as e:  # noqa: BLE001 — слот не должен ронять плагин
+            _log_ignored_exception(e, "некритичная ошибка")
         self._temp_layer = None
 
     def _apply_poly_preview_style(self):
@@ -2194,15 +2333,15 @@ class ImportDialog(QDialog):
         ds = self.display_settings
         style = self.poly_style.currentText()
 
-        outline_color = ds.get('poly_outline_color', QColor(230, 0, 0, 220))
-        outline_width = ds.get('poly_outline_width', 2)
-        fill_color = ds.get('poly_fill_color', QColor(230, 0, 0, 50))
+        outline_color = ds.get("poly_outline_color", QColor(230, 0, 0, 220))
+        outline_width = ds.get("poly_outline_width", 2)
+        fill_color = ds.get("poly_fill_color", QColor(230, 0, 0, 50))
 
-        if style == 'Контур':
+        if style == "Контур":
             self.rb_poly.setColor(outline_color)
             self.rb_poly.setFillColor(QColor(0, 0, 0, 0))
             self.rb_poly.setWidth(outline_width)
-        elif style == 'Заливка':
+        elif style == "Заливка":
             self.rb_poly.setColor(QColor(0, 0, 0, 0))
             self.rb_poly.setFillColor(fill_color)
             self.rb_poly.setWidth(0)
@@ -2215,9 +2354,9 @@ class ImportDialog(QDialog):
         """Обновляет масштабную линейку под текущий экстент карты."""
         try:
             self.scale_bar.update_scale()
-        except Exception:
-            pass
-    
+        except Exception as e:  # noqa: BLE001 — слот не должен ронять плагин
+            _log_ignored_exception(e, "некритичная ошибка")
+
     def _update_map_preview(self):
         """Перерисовывает превью-карту.
 
@@ -2249,7 +2388,7 @@ class ImportDialog(QDialog):
                 try:
                     x, y = self._get_xy(row)
                     pblock.append((x, y, row))
-                except Exception:
+                except ValueError:
                     continue
             if pblock:
                 parsed_blocks.append(pblock)
@@ -2260,8 +2399,8 @@ class ImportDialog(QDialog):
 
         geom_name = self.geom_combo.currentText()
         wkb = GEOM_WKB[geom_name]
-        is_point = (wkb == QgsWkbTypes.Point)
-        is_poly = wkb in (QgsWkbTypes.Polygon, QgsWkbTypes.MultiPolygon)
+        is_point = wkb == _QgsWkbTypesType_Point
+        is_poly = wkb in (_QgsWkbTypesType_Polygon, _QgsWkbTypesType_MultiPolygon)
         units = self._current_units()
 
         want_vertices = self.cb_vertices.isChecked() and not is_point
@@ -2275,7 +2414,7 @@ class ImportDialog(QDialog):
         if geoms:
             if is_point:
                 rb = self.rb_point
-            elif wkb == QgsWkbTypes.LineString:
+            elif wkb == _QgsWkbTypesType_LineString:
                 rb = self.rb_line
             else:
                 rb = self.rb_poly
@@ -2286,16 +2425,16 @@ class ImportDialog(QDialog):
                 rect = QgsRectangle(bb) if rect is None else _extend(rect, bb)
 
         # --- Номера точек и углов ---
-          # Сбор номеров: для точек — сами точки, для линий/полигонов — углы.
-        meta, row_vnum = self._calculate_meta(parsed_blocks, wkb)
-       
+        # Сбор номеров: для точек — сами точки, для линий/полигонов — углы.
+        _meta, row_vnum = self._calculate_meta(parsed_blocks, wkb)
+
         pts_data = []
 
         if is_point:
             if want_numbering:
                 for bi, block in enumerate(parsed_blocks):
                     for ri, (x, y, row) in enumerate(block):
-                        vnum_str = row_vnum.get(id(row), '?')
+                        vnum_str = row_vnum.get(id(row), "?")
                         pts_data.append((vnum_str, QgsPointXY(x, y)))
         else:
             if want_vertices or want_numbering:
@@ -2307,7 +2446,7 @@ class ImportDialog(QDialog):
                         subs = [pts_xyz]
                     for pts in subs:
                         for x, y, row in pts:
-                            vnum_str = row_vnum.get(id(row), '?')
+                            vnum_str = row_vnum.get(id(row), "?")
                             pts_data.append((vnum_str, QgsPointXY(x, y)))
 
         if (want_vertices or want_numbering) and not is_point and pts_data:
@@ -2320,25 +2459,23 @@ class ImportDialog(QDialog):
             self._make_number_layer(pts_data, self.crs_widget.crs())
 
         # --- Площади полигонов ---
-                # --- Площади полигонов ---
+        # --- Площади полигонов ---
         if is_poly and geoms:
             area_data = []
             total = 0.0
-            num = 0
-            for g in geoms:
-                num += 1
+            for num, g in enumerate(geoms, 1):
                 area_m2 = _geom_area_m2(g, units)
                 total += area_m2
                 c = self._label_anchor_for_poly(g)
                 # Передаём отдельно: номер, текст площади, точку подписи.
                 # HTML собирается внутри _make_area_label_layer.
-                area_data.append((num, f'{area_m2:.2f}', c))
+                area_data.append((num, f"{area_m2:.2f}", c))
 
             if area_data:
                 self._make_area_label_layer(area_data, self.crs_widget.crs())
 
             self._total_area_m2 = total
-            self.total_area_label.setText(f'Общая площадь: {total:.2f} м²')
+            self.total_area_label.setText(f"Общая площадь: {total:.2f} м²")
             self.total_area_label.setVisible(True)
 
         # Обновляем список слоёв на канве — номера и площади вместе.
@@ -2377,15 +2514,18 @@ class ImportDialog(QDialog):
         rect = None
         ds = self.display_settings
         colors = {
-            QgsWkbTypes.PointGeometry: (
-                ds.get('point_color', QColor(0, 90, 230, 255)),
-                ds.get('point_size', 6)),
-            QgsWkbTypes.LineGeometry: (
-                ds.get('line_color', QColor(20, 160, 60, 255)),
-                ds.get('line_width', 2)),
-            QgsWkbTypes.PolygonGeometry: (
-                ds.get('poly_outline_color', QColor(230, 0, 0, 220)),
-                ds.get('poly_outline_width', 2)),
+            _QgsWkbTypesGeom_Point: (
+                ds.get("point_color", QColor(0, 90, 230, 255)),
+                ds.get("point_size", 6),
+            ),
+            _QgsWkbTypesGeom_Line: (
+                ds.get("line_color", QColor(20, 160, 60, 255)),
+                ds.get("line_width", 2),
+            ),
+            _QgsWkbTypesGeom_Polygon: (
+                ds.get("poly_outline_color", QColor(230, 0, 0, 220)),
+                ds.get("poly_outline_width", 2),
+            ),
         }
 
         want_vertices = self.cb_vertices.isChecked()
@@ -2396,15 +2536,15 @@ class ImportDialog(QDialog):
         num = 0
 
         for part in self.spatial_data:
-            base = QgsWkbTypes.geometryType(part['wkb'])
+            base = QgsWkbTypes.geometryType(part["wkb"])
             color, width = colors.get(base, (QColor(0, 0, 0, 255), 2))
 
             # --- Рисуем геометрию ---
-            if base == QgsWkbTypes.PointGeometry:
+            if base == _QgsWkbTypesGeom_Point:
                 self.rb_point.setColor(color)
                 self.rb_point.setWidth(width)
                 rb = self.rb_point
-            elif base == QgsWkbTypes.LineGeometry:
+            elif base == _QgsWkbTypesGeom_Line:
                 self.rb_line.setColor(color)
                 self.rb_line.setWidth(width)
                 rb = self.rb_line
@@ -2412,7 +2552,7 @@ class ImportDialog(QDialog):
                 self._apply_poly_preview_style()
                 rb = self.rb_poly
 
-            for f in part['features']:
+            for f in part["features"]:
                 g = f.geometry()
                 if g is None or g.isEmpty():
                     continue
@@ -2422,32 +2562,30 @@ class ImportDialog(QDialog):
 
             # --- Считаем номера, вершины, площади ---
             units = self._current_units()
-            for f in part['features']:
+            for f in part["features"]:
                 g = f.geometry()
                 if g is None or g.isEmpty():
                     continue
 
                 num += 1
 
-                if base == QgsWkbTypes.PointGeometry:
+                if base == _QgsWkbTypesGeom_Point:
                     if want_numbering:
                         c = g.asPoint()
                         num_points_data.append((num, QgsPointXY(c)))
                 else:
                     if want_vertices or want_numbering:
-                        vnum = 0
-                        for v in self._iter_vertices(g):
-                            vnum += 1
+                        for vnum, v in enumerate(self._iter_vertices(g), 1):
                             num_points_data.append((vnum, v))
                             self.rb_vertex.addPoint(v)
                             bb = QgsRectangle(v.x(), v.y(), v.x(), v.y())
                             rect = bb if rect is None else _extend(rect, bb)
 
-                    if base == QgsWkbTypes.PolygonGeometry:
+                    if base == _QgsWkbTypesGeom_Polygon:
                         area_m2 = _geom_area_m2(g, units)
                         self._total_area_m2 += area_m2
                         c = self._label_anchor_for_poly(g)
-                        area_data.append((num, f'{area_m2:.2f}', c))
+                        area_data.append((num, f"{area_m2:.2f}", c))
 
         # --- Слои подписей ---
         if want_numbering and num_points_data:
@@ -2460,7 +2598,7 @@ class ImportDialog(QDialog):
 
         if self._total_area_m2 > 0:
             self.total_area_label.setText(
-                f'Общая площадь: {self._total_area_m2:.2f} м²'
+                f"Общая площадь: {self._total_area_m2:.2f} м²"
             )
             self.total_area_label.setVisible(True)
 
@@ -2507,7 +2645,7 @@ class ImportDialog(QDialog):
 
         biggest = max(parts, key=lambda p: p.area())
         return biggest.centroid().asPoint()
-    
+
     def _make_area_label_layer(self, pts_data, crs):
         """Создаёт временный точечный слой для подписей площадей.
 
@@ -2521,15 +2659,15 @@ class ImportDialog(QDialog):
         только подписи. Единицы — м². Нижний индекс — через HTML-тег
         <sub>, поэтому у формата подписи включён setAllowHtmlFormatting.
         """
-        layer = QgsVectorLayer(f'Point?crs={crs.authid()}', 'preview_area', 'memory')
+        layer = QgsVectorLayer(f"Point?crs={crs.authid()}", "preview_area", "memory")
         prov = layer.dataProvider()
-        prov.addAttributes([QgsField('label', T_STRING)])
+        prov.addAttributes([QgsField("label", T_STRING)])
         layer.updateFields()
 
         feats = []
         for num, area_text, pt in pts_data:
             # HTML-разметка: S с нижним индексом = площадь + единицы.
-            label = f'S<sub>{num}</sub>={area_text} м²'
+            label = f"S<sub>{num}</sub>={area_text} м²"
             f = QgsFeature(layer.fields())
             f.setGeometry(QgsGeometry.fromPointXY(pt))
             f.setAttributes([label])
@@ -2537,38 +2675,41 @@ class ImportDialog(QDialog):
         prov.addFeatures(feats)
         layer.updateExtents()
 
-        symbol = QgsMarkerSymbol.createSimple({
-            'name': 'circle',
-            'color': '0,0,0,0',
-            'size': '0.1',
-            'outline_style': 'no',
-        })
+        symbol = QgsMarkerSymbol.createSimple(
+            {
+                "name": "circle",
+                "color": "0,0,0,0",
+                "size": "0.1",
+                "outline_style": "no",
+            }
+        )
         layer.renderer().setSymbol(symbol)
 
         # Подписи площадей — тёмно-синие, чуть крупнее номеров.
         settings = QgsPalLayerSettings()
-        settings.fieldName = 'label'
+        settings.fieldName = "label"
         settings.isExpression = False
         try:
             settings.enabled = True
-        except Exception:
-            pass
+        except Exception as e:  # noqa: BLE001 — слот не должен ронять плагин
+            _log_ignored_exception(e, "некритичная ошибка")
+
         ds = self.display_settings
-        area_color = ds.get('area_label_color', QColor(0, 60, 160, 255))
-        area_size = ds.get('area_label_size', 10)
+        area_color = ds.get("area_label_color", QColor(0, 60, 160, 255))
+        area_size = ds.get("area_label_size", 10)
 
         fmt = QgsTextFormat()
         fmt.setSize(area_size)
         try:
             fmt.setColor(area_color)
-        except Exception:
-            pass
+        except Exception as e:  # noqa: BLE001 — слот не должен ронять плагин
+            _log_ignored_exception(e, "некритичная ошибка")
         # Разрешаем HTML-разметку в подписи — иначе <sub> выведется
         # буквально как текст. Метод есть в QGIS 3.16+, у нас 3.44.
         try:
             fmt.setAllowHtmlFormatting(True)
-        except Exception:
-            pass
+        except Exception as e:  # noqa: BLE001 — слот не должен ронять плагин
+            _log_ignored_exception(e, "некритичная ошибка")
         settings.setFormat(fmt)
         layer.setLabeling(QgsVectorLayerSimpleLabeling(settings))
         layer.setLabelsEnabled(True)
@@ -2586,9 +2727,9 @@ class ImportDialog(QDialog):
         Слой не добавляется в QgsProject и не сохраняется на диск.
         Маркер прозрачный, чтобы были видны только подписи.
         """
-        layer = QgsVectorLayer(f'Point?crs={crs.authid()}', 'preview_num', 'memory')
+        layer = QgsVectorLayer(f"Point?crs={crs.authid()}", "preview_num", "memory")
         prov = layer.dataProvider()
-        prov.addAttributes([QgsField('num', T_INT)])
+        prov.addAttributes([QgsField("num", T_INT)])
         layer.updateFields()
 
         feats = []
@@ -2600,22 +2741,24 @@ class ImportDialog(QDialog):
         prov.addFeatures(feats)
         layer.updateExtents()
 
-        symbol = QgsMarkerSymbol.createSimple({
-            'name': 'circle',
-            'color': '0,0,0,0',
-            'size': '0.1',
-            'outline_style': 'no',
-        })
+        symbol = QgsMarkerSymbol.createSimple(
+            {
+                "name": "circle",
+                "color": "0,0,0,0",
+                "size": "0.1",
+                "outline_style": "no",
+            }
+        )
         layer.renderer().setSymbol(symbol)
 
         ds = self.display_settings
-        num_color = ds.get('num_label_color', QColor(180, 0, 0, 255))
-        num_size = ds.get('num_label_size', 10)
+        num_color = ds.get("num_label_color", QColor(180, 0, 0, 255))
+        num_size = ds.get("num_label_size", 10)
         _enable_number_labels(
             layer,
-            color=f'{num_color.red()},{num_color.green()},'
-                  f'{num_color.blue()},{num_color.alpha()}',
-            size=num_size
+            color=f"{num_color.red()},{num_color.green()},"
+            f"{num_color.blue()},{num_color.alpha()}",
+            size=num_size,
         )
 
         self._preview_layers.append(layer)
@@ -2628,9 +2771,9 @@ class ImportDialog(QDialog):
         с _build_features, чтобы превью было 1:1 с результатом импорта.
         """
         geoms = []
-        is_poly = wkb in (QgsWkbTypes.Polygon, QgsWkbTypes.MultiPolygon)
+        is_poly = wkb in (_QgsWkbTypesType_Polygon, _QgsWkbTypesType_MultiPolygon)
 
-        if wkb == QgsWkbTypes.Point:
+        if wkb == _QgsWkbTypesType_Point:
             for block in parsed_blocks:
                 for x, y, _row in block:
                     geoms.append(QgsGeometry.fromPointXY(QgsPointXY(x, y)))
@@ -2650,15 +2793,15 @@ class ImportDialog(QDialog):
                 sub_groups = [pts_xyz]
 
             for pts in sub_groups:
-                if wkb == QgsWkbTypes.LineString and len(pts) < 2:
+                if wkb == _QgsWkbTypesType_LineString and len(pts) < 2:
                     continue
                 if is_poly and len(pts) < 3:
                     continue
 
                 ring = [QgsPointXY(x, y) for x, y, _ in pts]
-                if wkb == QgsWkbTypes.LineString:
+                if wkb == _QgsWkbTypesType_LineString:
                     g = QgsGeometry.fromPolylineXY(ring)
-                elif wkb == QgsWkbTypes.Polygon:
+                elif wkb == _QgsWkbTypesType_Polygon:
                     g = QgsGeometry.fromPolygonXY([ring])
                 else:
                     g = QgsGeometry.fromMultiPolygonXY([[ring]])
@@ -2680,13 +2823,15 @@ class ImportDialog(QDialog):
             • пространственные — .shp, .geojson, .json, .kml, .gpkg.
         """
         path, _ = QFileDialog.getOpenFileName(
-            self, 'Файл', '',
-            'Все поддерживаемые (*.csv *.txt *.tab *.xls *.xlsx *.ods '
-            '*.shp *.geojson *.json *.kml *.gpkg);;'
-            'Текстовые (*.csv *.txt *.tab);;'
-            'Excel (*.xls *.xlsx *.ods);;'
-            'Пространственные (*.shp *.geojson *.json *.kml *.gpkg);;'
-            'Все файлы (*.*)'
+            self,
+            "Файл",
+            "",
+            "Все поддерживаемые (*.csv *.txt *.tab *.xls *.xlsx *.ods "
+            "*.shp *.geojson *.json *.kml *.gpkg);;"
+            "Текстовые (*.csv *.txt *.tab);;"
+            "Excel (*.xls *.xlsx *.ods);;"
+            "Пространственные (*.shp *.geojson *.json *.kml *.gpkg);;"
+            "Все файлы (*.*)",
         )
         if not path:
             return
@@ -2695,12 +2840,12 @@ class ImportDialog(QDialog):
     def on_browse_save(self):
         """Открывает диалог сохранения .gpkg и проставляет путь."""
         path, _ = QFileDialog.getSaveFileName(
-            self, 'Сохранить в GeoPackage', '', 'GeoPackage (*.gpkg)'
+            self, "Сохранить в GeoPackage", "", "GeoPackage (*.gpkg)"
         )
         if not path:
             return
-        if not path.lower().endswith('.gpkg'):
-            path += '.gpkg'
+        if not path.lower().endswith(".gpkg"):
+            path += ".gpkg"
         self.save_path_edit.setText(path)
         self.cb_save_file.setChecked(True)
 
@@ -2720,29 +2865,28 @@ class ImportDialog(QDialog):
 
         ext = os.path.splitext(path)[1].lower()
 
-        if ext in ('.xls', '.xlsx', '.ods'):
+        if ext in (".xls", ".xlsx", ".ods"):
             self._load_excel_file(path)
             return
 
-        if ext in ('.shp', '.geojson', '.json', '.kml', '.gpkg'):
+        if ext in (".shp", ".geojson", ".json", ".kml", ".gpkg"):
             self._load_spatial_file(path)
             return
 
         # Текстовый формат.
         try:
-            with open(path, 'r', encoding=self._py_encoding()) as f:
+            with open(path, "r", encoding=self._py_encoding()) as f:
                 text = f.read()
-        except Exception as e:
-            QMessageBox.warning(self, 'Ошибка',
-                                f'Не удалось прочитать файл:\n{e}')
+        except (OSError, UnicodeDecodeError, LookupError) as e:
+            QMessageBox.warning(self, "Ошибка", f"Не удалось прочитать файл:\n{e}")
             return
-        self._load_text(text, source=f'файл «{path}»')
+        self._load_text(text, source=f"файл «{path}»")
 
     def on_clipboard(self):
         """Загружает текст из буфера обмена."""
         text = QApplication.clipboard().text()
         if not text.strip():
-            QMessageBox.warning(self, 'Пусто', 'В буфере нет текста')
+            QMessageBox.warning(self, "Пусто", "В буфере нет текста")
             return
 
         # Сбрасываем всё, что осталось от предыдущей загрузки,
@@ -2750,7 +2894,7 @@ class ImportDialog(QDialog):
         self._reset_before_load()
         self.file_edit.clear()
 
-        self._load_text(text, source='буфер обмена')
+        self._load_text(text, source="буфер обмена")
 
     def _reset_before_load(self):
         """Сбрасывает состояние перед загрузкой нового источника.
@@ -2771,7 +2915,7 @@ class ImportDialog(QDialog):
         self.data_blocks = []
         self.rows = []
         self.headers = []
-        self._source_text = ''
+        self._source_text = ""
 
         self.spatial_data = []
         self._is_spatial_input = False
@@ -2782,8 +2926,8 @@ class ImportDialog(QDialog):
         self.preview.setColumnCount(0)
         self.preview.blockSignals(False)
 
-        self.format_label.setText('Формат: —')
-        self.headers_label.setText('Заголовки: —')
+        self.format_label.setText("Формат: —")
+        self.headers_label.setText("Заголовки: —")
 
         self._clear_rubber()
         self._clear_temp_layer()
@@ -2794,13 +2938,13 @@ class ImportDialog(QDialog):
         # Поле «Геометрия» возвращаем к доступному состоянию.
         try:
             self.geom_combo.setEnabled(True)
-        except Exception:
-            pass
-   
+        except Exception as e:  # noqa: BLE001 — слот не должен ронять плагин
+            _log_ignored_exception(e, "некритичная ошибка")
+
     def on_clear(self):
         """Полностью очищает форму и превью."""
         self.file_edit.clear()
-        self._source_text = ''
+        self._source_text = ""
         # Сбрасываем пространственный вход.
         self.spatial_data = []
         self._is_spatial_input = False
@@ -2818,17 +2962,25 @@ class ImportDialog(QDialog):
         self.preview.clear()
         self.preview.setRowCount(0)
         self.preview.setColumnCount(0)
-        self.format_label.setText('Формат: —')
-        self.headers_label.setText('Заголовки: —')
+        self.format_label.setText("Формат: —")
+        self.headers_label.setText("Заголовки: —")
 
-        combos = [self.x_combo, self.y_combo,
-                  self.c1_combo, self.c2_combo,
-                  self.c1d, self.c1m, self.c1s,
-                  self.c2d, self.c2m, self.c2s]
+        combos = [
+            self.x_combo,
+            self.y_combo,
+            self.c1_combo,
+            self.c2_combo,
+            self.c1d,
+            self.c1m,
+            self.c1s,
+            self.c2d,
+            self.c2m,
+            self.c2s,
+        ]
         for c in combos:
             c.blockSignals(True)
             c.clear()
-            c.addItem('—')
+            c.addItem("—")
             c.blockSignals(False)
         self.coord_stack.setCurrentIndex(0)
         # Возвращаем видимость всех текстовых опций —
@@ -2836,25 +2988,27 @@ class ImportDialog(QDialog):
         self._update_options_visibility()
         self._clear_rubber()
         self._clear_temp_layer()
-       
+
         try:
             self.map_canvas.refresh()
-        except Exception:
-            pass
+        except Exception as e:  # noqa: BLE001 — слот не должен ронять плагин
+            _log_ignored_exception(e, "некритичная ошибка")
 
     def _py_encoding(self):
         """Возвращает имя кодировки Python для выбранного варианта."""
         e = self.enc.currentText()
-        return {'UTF-8': 'utf-8', 'CP1251': 'cp1251', 'UTF-16': 'utf-16'}.get(e, 'utf-8')
+        return {"UTF-8": "utf-8", "CP1251": "cp1251", "UTF-16": "utf-16"}.get(
+            e, "utf-8"
+        )
 
     def _current_delim(self):
         """Возвращает символ-разделитель с учётом режима 'авто'."""
         name = self.delim.currentText()
-        if name == 'авто':
+        if name == "авто":
             if self._source_text:
                 return self._detect_delimiter(self._source_text)
-            return '\t'
-        return DELIMS.get(name) or '\t'
+            return "\t"
+        return DELIMS.get(name) or "\t"
 
     def _detect_delimiter(self, text):
         """Автоопределение разделителя.
@@ -2865,21 +3019,21 @@ class ImportDialog(QDialog):
         """
         lines = [l for l in text.splitlines() if l.strip()][:15]
         if not lines:
-            return '\t'
+            return "\t"
 
-        candidates = ['\t', ',', ';', ' ']
-        best = '\t'
+        candidates = ["\t", ",", ";", " "]
+        best = "\t"
         best_score = -1
 
         for d in candidates:
             counts = []
             for line in lines:
-                if d == ' ':
+                if d == " ":
                     counts.append(len(line.split()))
                 else:
                     try:
                         counts.append(len(next(csv.reader([line], delimiter=d))))
-                    except Exception:
+                    except (csv.Error, ValueError):
                         counts.append(0)
 
             multi = [c for c in counts if c > 1]
@@ -2903,7 +3057,7 @@ class ImportDialog(QDialog):
         Нужно, чтобы строка из одной ячейки "" считалась пустой.
         """
         if c is None:
-            return ''
+            return ""
         s = str(c).strip()
         while len(s) >= 2 and s[0] == '"' and s[-1] == '"':
             s = s[1:-1].strip()
@@ -2918,12 +3072,12 @@ class ImportDialog(QDialog):
         blocks = []
         current = []
         for line in text.splitlines():
-            if delim == ' ':
+            if delim == " ":
                 cells = line.split()
             else:
                 try:
                     cells = next(csv.reader([line], delimiter=delim))
-                except Exception:
+                except (csv.Error, ValueError):
                     cells = [line]
             cells = [self._clean_cell(c) for c in cells]
             if any(c for c in cells):
@@ -2941,15 +3095,16 @@ class ImportDialog(QDialog):
         blocks = self._read_excel_via_ogr(path)
         if blocks is None:
             QMessageBox.warning(
-                self, 'Не удалось прочитать Excel',
-                f'Файл «{path}» не читается через GDAL/OGR.\n\n'
-                f'Возможные причины:\n'
-                f'  • файл повреждён или защищён паролем;\n'
-                f'  • формат не поддерживается сборкой GDAL.\n\n'
-                f'Откройте файл в Excel/LibreOffice и сохраните в .csv.'
+                self,
+                "Не удалось прочитать Excel",
+                f"Файл «{path}» не читается через GDAL/OGR.\n\n"
+                f"Возможные причины:\n"
+                f"  • файл повреждён или защищён паролем;\n"
+                f"  • формат не поддерживается сборкой GDAL.\n\n"
+                f"Откройте файл в Excel/LibreOffice и сохраните в .csv.",
             )
             return
-        self._load_from_blocks(blocks, source=f'Excel «{path}»')
+        self._load_from_blocks(blocks, source=f"Excel «{path}»")
 
     def _read_excel_via_ogr(self, path):
         """Читает первый непустой лист Excel через OGR.
@@ -2964,7 +3119,7 @@ class ImportDialog(QDialog):
 
         try:
             ds = ogr.Open(path)
-        except Exception:
+        except (RuntimeError, OSError):
             return None
         if ds is None:
             return None
@@ -2981,8 +3136,7 @@ class ImportDialog(QDialog):
 
             defn = target_layer.GetLayerDefn()
             field_count = defn.GetFieldCount()
-            headers = [defn.GetFieldDefn(j).GetName()
-                       for j in range(field_count)]
+            headers = [defn.GetFieldDefn(j).GetName() for j in range(field_count)]
 
             rows = [headers]
             target_layer.ResetReading()
@@ -2991,7 +3145,7 @@ class ImportDialog(QDialog):
                 row = []
                 for j in range(field_count):
                     val = feat.GetField(j)
-                    row.append('' if val is None else str(val))
+                    row.append("" if val is None else str(val))
                 rows.append(row)
                 feat = target_layer.GetNextFeature()
         finally:
@@ -3017,28 +3171,29 @@ class ImportDialog(QDialog):
         blocks[0].insert(0, headers)
         return blocks
 
-    def _load_from_blocks(self, blocks, source='данные'):
+    def _load_from_blocks(self, blocks, source="данные"):
         """Загружает уже разобранные блоки (например, из Excel).
 
         Разделитель не применяется — данные пришли готовыми.
         _source_text остаётся пустым, чтобы смена разделителя
         не пыталась пересобрать таблицу.
         """
-        self._source_text = ''
+        self._source_text = ""
 
         if not blocks:
-            QMessageBox.warning(self, 'Пусто', 'Нет данных')
+            QMessageBox.warning(self, "Пусто", "Нет данных")
             return
 
-        ok, num_cells, nonempty_cells, total_rows = self._looks_like_coords(blocks)
+        ok, num_cells, _nonempty_cells, total_rows = self._looks_like_coords(blocks)
         if not ok:
             QMessageBox.warning(
-                self, 'Не похоже на координаты',
-                f'Загруженные данные ({source}) не похожи на таблицу '
-                f'с координатами.\n\n'
-                f'Строк: {total_rows}\n'
-                f'Из них чисел: {num_cells}\n\n'
-                f'Проверьте, что в файле есть колонки с координатами.'
+                self,
+                "Не похоже на координаты",
+                f"Загруженные данные ({source}) не похожи на таблицу "
+                f"с координатами.\n\n"
+                f"Строк: {total_rows}\n"
+                f"Из них чисел: {num_cells}\n\n"
+                f"Проверьте, что в файле есть колонки с координатами.",
             )
             return
 
@@ -3056,40 +3211,41 @@ class ImportDialog(QDialog):
         parts = self._read_spatial_via_ogr(path)
         if not parts:
             QMessageBox.warning(
-                self, 'Не удалось прочитать файл',
-                f'Файл «{path}» не читается через GDAL/OGR.\n\n'
-                f'Возможные причины:\n'
-                f'  • файл повреждён;\n'
-                f'  • это не пространственный файл;\n'
-                f'  • формат не поддерживается сборкой GDAL.'
+                self,
+                "Не удалось прочитать файл",
+                f"Файл «{path}» не читается через GDAL/OGR.\n\n"
+                f"Возможные причины:\n"
+                f"  • файл повреждён;\n"
+                f"  • это не пространственный файл;\n"
+                f"  • формат не поддерживается сборкой GDAL.",
             )
             return
 
         self.spatial_data = parts
         self._is_spatial_input = True
-        self._source_text = ''
+        self._source_text = ""
 
         # СК файла — берём у первого слоя.
         try:
-            self._spatial_crs = parts[0]['layer'].crs()
-        except Exception:
+            self._spatial_crs = parts[0]["layer"].crs()
+        except (KeyError, AttributeError, RuntimeError):
             self._spatial_crs = None
 
         # Подставляем реальный тип геометрии в поле «Геометрия».
         # Если типов несколько — ставим первый, пользователь увидит
         # остальные при импорте как отдельные слои.
         try:
-            base = QgsWkbTypes.geometryType(parts[0]['wkb'])
-            if base == QgsWkbTypes.PointGeometry:
-                i = self.geom_combo.findText('Точка')
-            elif base == QgsWkbTypes.LineGeometry:
-                i = self.geom_combo.findText('Линия')
+            base = QgsWkbTypes.geometryType(parts[0]["wkb"])
+            if base == _QgsWkbTypesGeom_Point:
+                i = self.geom_combo.findText("Точка")
+            elif base == _QgsWkbTypesGeom_Line:
+                i = self.geom_combo.findText("Линия")
             else:
-                i = self.geom_combo.findText('Полигон')
+                i = self.geom_combo.findText("Полигон")
             if i >= 0:
                 self.geom_combo.setCurrentIndex(i)
-        except Exception:
-            pass
+        except Exception as e:  # noqa: BLE001 — слот не должен ронять плагин
+            _log_ignored_exception(e, "некритичная ошибка")
 
         # Нумерация углов и точки по углам для spatial-файла
         # смысла не имеют — сразу снимаем, чтобы не засорять
@@ -3102,17 +3258,16 @@ class ImportDialog(QDialog):
         self._fill_spatial_preview_table()
         self._update_map_preview()
 
-        total = sum(len(p['features']) for p in parts)
+        total = sum(len(p["features"]) for p in parts)
         self.iface.messageBar().pushInfo(
-            'Импорт',
-            f'Загружено объектов: {total} (слоёв по типам: {len(parts)})'
+            "Импорт", f"Загружено объектов: {total} (слоёв по типам: {len(parts)})"
         )
 
     def _read_spatial_via_ogr(self, path):
         """Читает пространственный файл и разбивает объекты по типам.
 
         Возвращает список словарей:
-            [{'name': 'Точки', 'wkb': QgsWkbTypes.Point,
+            [{'name': 'Точки', 'wkb': _QgsWkbTypesType_Point,
               'layer': QgsVectorLayer, 'features': [QgsFeature, ...]}, ...]
 
         Один элемент = один тип геометрии. Если в файле точки + линии +
@@ -3122,15 +3277,22 @@ class ImportDialog(QDialog):
         мульти-X, одиночные X — одиночными).
         """
         try:
-            from osgeo import ogr
-            from qgis.core import (QgsVectorLayer, QgsFeature, QgsGeometry,
-                                   QgsFields, QgsField, QgsWkbTypes)
+            import importlib
+
+            importlib.import_module("osgeo.ogr")
+            from qgis.core import (
+                QgsFeature,
+                QgsField,
+                QgsGeometry,
+                QgsVectorLayer,
+                QgsWkbTypes,
+            )
         except ImportError:
             return []
 
         # Открываем через QgsVectorLayer — так удобнее работать с полями,
         # объектами и геометрией.
-        layer = QgsVectorLayer(path, 'spatial_source', 'ogr')
+        layer = QgsVectorLayer(path, "spatial_source", "ogr")
         if not layer.isValid():
             return []
 
@@ -3149,11 +3311,11 @@ class ImportDialog(QDialog):
             is_multi = QgsWkbTypes.isMultiType(wkb)
 
             if base not in groups:
-                groups[base] = {'wkb': wkb, 'features': [], 'is_multi': is_multi}
-            groups[base]['features'].append(f)
+                groups[base] = {"wkb": wkb, "features": [], "is_multi": is_multi}
+            groups[base]["features"].append(f)
             # Если хоть один объект — мульти, тип группы остаётся мульти.
             if is_multi:
-                groups[base]['is_multi'] = True
+                groups[base]["is_multi"] = True
 
         if not groups:
             return []
@@ -3165,28 +3327,28 @@ class ImportDialog(QDialog):
 
         def type_name(wkb):
             base = QgsWkbTypes.geometryType(wkb)
-            if base == QgsWkbTypes.PointGeometry:
-                return 'Точки'
-            if base == QgsWkbTypes.LineGeometry:
-                return 'Линии'
-            if base == QgsWkbTypes.PolygonGeometry:
-                return 'Полигоны'
-            return 'Объекты'
+            if base == _QgsWkbTypesGeom_Point:
+                return "Точки"
+            if base == _QgsWkbTypesGeom_Line:
+                return "Линии"
+            if base == _QgsWkbTypesGeom_Polygon:
+                return "Полигоны"
+            return "Объекты"
 
         for base, info in groups.items():
-            name = type_name(info['wkb'])
+            name = type_name(info["wkb"])
 
             # Создаём memory-слой с СК источника и всеми полями
             # источника. Это не для проекта, а только как «держатель»
             # полей и геометрии.
-            uri = f'{QgsWkbTypes.displayString(info["wkb"])}?crs={layer.crs().authid()}'
-            holder = QgsVectorLayer(uri, name, 'memory')
+            uri = f"{QgsWkbTypes.displayString(info['wkb'])}?crs={layer.crs().authid()}"
+            holder = QgsVectorLayer(uri, name, "memory")
             hp = holder.dataProvider()
             hp.addAttributes([QgsField(f.name(), f.type()) for f in source_fields])
             holder.updateFields()
 
             new_feats = []
-            for src in info['features']:
+            for src in info["features"]:
                 nf = QgsFeature(holder.fields())
                 nf.setGeometry(QgsGeometry(src.geometry()))
                 # Копируем атрибуты по индексам.
@@ -3196,16 +3358,18 @@ class ImportDialog(QDialog):
                 nf.setAttributes(attrs)
                 new_feats.append(nf)
 
-            result.append({
-                'name': name,
-                'wkb': info['wkb'],
-                'layer': holder,
-                'features': new_feats,
-            })
+            result.append(
+                {
+                    "name": name,
+                    "wkb": info["wkb"],
+                    "layer": holder,
+                    "features": new_feats,
+                }
+            )
 
-        return result    
+        return result
 
-    def _load_text(self, text, source='данные'):
+    def _load_text(self, text, source="данные"):
         """Загружает текст и запускает разбор.
 
         Если текущий разделитель не даёт распознать данные как
@@ -3236,12 +3400,12 @@ class ImportDialog(QDialog):
 
         # Пробуем альтернативы.
         current_name = self.delim.currentText()
-        all_names = ['авто', 'таб', 'запятая', 'точка с запятой', 'пробел']
+        all_names = ["авто", "таб", "запятая", "точка с запятой", "пробел"]
         candidates = [n for n in all_names if n != current_name]
 
         best_name = None
         for name in candidates:
-            if name == 'авто':
+            if name == "авто":
                 d = self._detect_delimiter(text)
             else:
                 d = DELIMS.get(name)
@@ -3259,17 +3423,18 @@ class ImportDialog(QDialog):
         # Нашли альтернативу — спрашиваем пользователя.
         if best_name is not None:
             ans = QMessageBox.question(
-                self, 'Возможно, другой разделитель',
-                f'Текущий разделитель «{current_name}» не подходит '
-                f'для этих данных.\n\n'
-                f'С разделителем «{best_name}» данные распознаются '
-                f'как координаты.\n\n'
-                f'Переключить разделитель на «{best_name}»?',
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.Yes
+                self,
+                "Возможно, другой разделитель",
+                f"Текущий разделитель «{current_name}» не подходит "
+                f"для этих данных.\n\n"
+                f"С разделителем «{best_name}» данные распознаются "
+                f"как координаты.\n\n"
+                f"Переключить разделитель на «{best_name}»?",
+                _QMessageBox_Yes | _QMessageBox_No,
+                _QMessageBox_Yes,
             )
 
-            if ans == QMessageBox.Yes:
+            if ans == _QMessageBox_Yes:
                 # Меняем разделитель без вызова _reload_from_source —
                 # он бы снова дёрнул парсинг и получилась рекурсия.
                 self.delim.blockSignals(True)
@@ -3287,28 +3452,29 @@ class ImportDialog(QDialog):
 
         # Ничего не подошло — стандартные сообщения об ошибке.
         if not blocks:
-            QMessageBox.warning(self, 'Пусто', 'Нет данных')
-            self._source_text = ''
+            QMessageBox.warning(self, "Пусто", "Нет данных")
+            self._source_text = ""
             return
 
         ok, num_cells, nonempty_cells, total_rows = self._looks_like_coords(blocks)
         QMessageBox.warning(
-            self, 'Не похоже на координаты',
-            f'Загруженные данные ({source}) не похожи на таблицу '
-            f'с координатами.\n\n'
-            f'Строк: {total_rows}\n'
-            f'Непустых ячеек: {nonempty_cells}\n'
-            f'Из них чисел: {num_cells}\n\n'
-            f'Проверьте разделитель и кодировку.\n\n'
-            f'Ожидается таблица, где в каждой строке — точка, а в '
-            f'колонках — числа.\n\n'
-            f'Примеры:\n'
-            f'  55.7244\t36.3638\n'
-            f'  465457.47\t1305443.78\n'
+            self,
+            "Не похоже на координаты",
+            f"Загруженные данные ({source}) не похожи на таблицу "
+            f"с координатами.\n\n"
+            f"Строк: {total_rows}\n"
+            f"Непустых ячеек: {nonempty_cells}\n"
+            f"Из них чисел: {num_cells}\n\n"
+            f"Проверьте разделитель и кодировку.\n\n"
+            f"Ожидается таблица, где в каждой строке — точка, а в "
+            f"колонках — числа.\n\n"
+            f"Примеры:\n"
+            f"  55.7244\t36.3638\n"
+            f"  465457.47\t1305443.78\n"
             f"  55°43'28.05\"\t36°21'49.94\"\n"
-            f'  55\t43\t28.05\t36\t21\t49.94'
+            f"  55\t43\t28.05\t36\t21\t49.94",
         )
-        self._source_text = ''
+        self._source_text = ""
 
     def _reload_from_source(self):
         """Пересобирает таблицу при смене разделителя из сохранённого текста."""
@@ -3324,14 +3490,14 @@ class ImportDialog(QDialog):
             self.preview.clear()
             self.preview.setRowCount(0)
             self.preview.setColumnCount(0)
-            self.format_label.setText('Формат: —')
-            self.headers_label.setText('Заголовки: —')
+            self.format_label.setText("Формат: —")
+            self.headers_label.setText("Заголовки: —")
             self._clear_rubber()
             self._clear_temp_layer()
             try:
                 self.map_canvas.refresh()
-            except Exception:
-                pass
+            except Exception as e:  # noqa: BLE001 — слот не должен ронять плагин
+                _log_ignored_exception(e, "некритичная ошибка")
             return
         self.blocks = blocks
         self._rebuild_from_raw()
@@ -3361,8 +3527,7 @@ class ImportDialog(QDialog):
         if nonempty_cells == 0:
             return False, 0, 0, total_rows
 
-        ok = (num_cells >= NUM_MIN and
-              num_cells / nonempty_cells >= NUM_RATIO_MIN)
+        ok = num_cells >= NUM_MIN and num_cells / nonempty_cells >= NUM_RATIO_MIN
         return ok, num_cells, nonempty_cells, total_rows
 
     def _detect_headers(self):
@@ -3436,11 +3601,11 @@ class ImportDialog(QDialog):
                     data_blocks.append(list(b))
         else:
             n = max(len(r) for b in self.blocks for r in b)
-            self.headers = [f'col{i+1}' for i in range(n)]
+            self.headers = [f"col{i + 1}" for i in range(n)]
             data_blocks = [list(b) for b in self.blocks]
 
         self.headers_label.setText(
-            'Заголовки: есть' if has_headers else 'Заголовки: нет'
+            "Заголовки: есть" if has_headers else "Заголовки: нет"
         )
 
         flat = []
@@ -3470,9 +3635,9 @@ class ImportDialog(QDialog):
 
         self.detected_format = self._detect_format()
         units = self._current_units()
-        units_ru = 'градусы' if units == 'degrees' else 'метры'
+        units_ru = "градусы" if units == "degrees" else "метры"
         self.format_label.setText(
-            f'Формат: {FMT_LABELS[self.detected_format]} ({units_ru})'
+            f"Формат: {FMT_LABELS[self.detected_format]} ({units_ru})"
         )
 
         idx = {FMT_DECIMAL: 0, FMT_HMS_ONE: 1, FMT_HMS_THREE: 2}[self.detected_format]
@@ -3488,7 +3653,7 @@ class ImportDialog(QDialog):
 
     def _cell(self, row, idx):
         """Безопасно берёт значение ячейки. Нет индекса — ''."""
-        return row[idx] if 0 <= idx < len(row) else ''
+        return row[idx] if 0 <= idx < len(row) else ""
 
     def _detect_format(self):
         """Определяет формат координат по данным.
@@ -3501,7 +3666,7 @@ class ImportDialog(QDialog):
             return FMT_DECIMAL
         for r in self.rows[:10]:
             for cell in r:
-                if '°' in str(cell):
+                if "°" in str(cell):
                     return FMT_HMS_ONE
 
         num_cols = self._find_numeric_columns()
@@ -3522,13 +3687,13 @@ class ImportDialog(QDialog):
         Для десятичного текста — по модулю значений.
         """
         if self._is_spatial_input and self.spatial_data:
-            crs = self.spatial_data[0]['layer'].crs()
+            crs = self.spatial_data[0]["layer"].crs()
             if crs and crs.isValid() and crs.isGeographic():
-                return 'degrees'
-            return 'meters'
+                return "degrees"
+            return "meters"
 
         if self.detected_format in (FMT_HMS_ONE, FMT_HMS_THREE):
-            return 'degrees'
+            return "degrees"
         return self._detect_units()
 
     def _detect_units(self):
@@ -3538,25 +3703,25 @@ class ImportDialog(QDialog):
         широтой/долготой, значит метры.
         """
         if not self.rows:
-            return 'meters'
+            return "meters"
         num_cols = self._find_numeric_columns()
         if not num_cols:
-            return 'meters'
-        sample = self.rows[:min(20, len(self.rows))]
+            return "meters"
+        sample = self.rows[: min(20, len(self.rows))]
         max_abs = 0.0
         for r in sample:
             for j in num_cols[:2]:
                 v = _num(self._cell(r, j))
                 if v is not None and abs(v) > max_abs:
                     max_abs = abs(v)
-        return 'degrees' if max_abs <= 180 else 'meters'
+        return "degrees" if max_abs <= 180 else "meters"
 
     def _find_numeric_columns(self):
         """Индексы колонок, где ≥70% значений — числа."""
         if not self.rows:
             return []
         n = max(len(r) for r in self.rows[:10])
-        sample = self.rows[:min(10, len(self.rows))]
+        sample = self.rows[: min(10, len(self.rows))]
         cols = []
         for j in range(n):
             ok = tot = 0
@@ -3574,7 +3739,7 @@ class ImportDialog(QDialog):
         if not self.rows:
             return []
         n = max(len(r) for r in self.rows[:10])
-        sample = self.rows[:min(10, len(self.rows))]
+        sample = self.rows[: min(10, len(self.rows))]
         cols = []
         for j in range(n):
             ok = tot = 0
@@ -3590,24 +3755,32 @@ class ImportDialog(QDialog):
 
     def _fill_column_combos(self):
         """Наполняет все выпадашки колонок актуальными именами."""
-        combos = [self.x_combo, self.y_combo,
-                  self.c1_combo, self.c2_combo,
-                  self.c1d, self.c1m, self.c1s,
-                  self.c2d, self.c2m, self.c2s,
-                  self.vnum_col_combo]
+        combos = [
+            self.x_combo,
+            self.y_combo,
+            self.c1_combo,
+            self.c2_combo,
+            self.c1d,
+            self.c1m,
+            self.c1s,
+            self.c2d,
+            self.c2m,
+            self.c2s,
+            self.vnum_col_combo,
+        ]
         for c in combos:
             c.blockSignals(True)
             c.clear()
-            c.addItem('—')
+            c.addItem("—")
             for h in self.headers:
                 c.addItem(h)
             c.blockSignals(False)
             c.setMinimumContentsLength(COL_COMBO_MIN_CHARS)
             c.setSizeAdjustPolicy(COL_COMBO_POLICY)
-            c.view().setMinimumWidth(c.fontMetrics().horizontalAdvance('—' * 4))
+            c.view().setMinimumWidth(c.fontMetrics().horizontalAdvance("—" * 4))
             c.updateGeometry()
         # Восстанавливаем ранее выбранную колонку для номеров.
-        if hasattr(self, '_saved_vnum_col') and self._saved_vnum_col:
+        if hasattr(self, "_saved_vnum_col") and self._saved_vnum_col:
             i = self.vnum_col_combo.findText(self._saved_vnum_col)
             if i >= 0:
                 self.vnum_col_combo.setCurrentIndex(i)
@@ -3662,25 +3835,25 @@ class ImportDialog(QDialog):
             xi = self._col_index(self.x_combo)
             yi = self._col_index(self.y_combo)
             if xi < 0 or yi < 0:
-                raise ValueError('не выбраны колонки координат')
+                raise ValueError("не выбраны колонки координат")
             r1 = self._cell(row, xi)
             r2 = self._cell(row, yi)
             v1 = _num(r1)
             v2 = _num(r2)
             if v1 is None:
-                raise ValueError(f'Коорд.1 = {r1!r} — не число')
+                raise ValueError(f"Коорд.1 = {r1!r} — не число")
             if v2 is None:
-                raise ValueError(f'Коорд.2 = {r2!r} — не число')
+                raise ValueError(f"Коорд.2 = {r2!r} — не число")
 
             units = self._current_units()
-            if units == 'degrees':
-                if self.order_combo.currentText().startswith('Широта'):
+            if units == "degrees":
+                if self.order_combo.currentText().startswith("Широта"):
                     lat, lon = v1, v2
                 else:
                     lat, lon = v2, v1
                 return lon, lat
             else:
-                if self.axes_combo.currentText().startswith('Восток'):
+                if self.axes_combo.currentText().startswith("Восток"):
                     east, north = v1, v2
                 else:
                     north, east = v1, v2
@@ -3691,16 +3864,16 @@ class ImportDialog(QDialog):
             i1 = self._col_index(self.c1_combo)
             i2 = self._col_index(self.c2_combo)
             if i1 < 0 or i2 < 0:
-                raise ValueError('не выбраны колонки координат')
+                raise ValueError("не выбраны колонки координат")
             v1 = self._cell(row, i1)
             v2 = self._cell(row, i2)
             a, err = parse_hms_one(v1)
             if a is None:
-                raise ValueError(f'Коорд.1 = {v1!r}: {err}')
+                raise ValueError(f"Коорд.1 = {v1!r}: {err}")
             b, err = parse_hms_one(v2)
             if b is None:
-                raise ValueError(f'Коорд.2 = {v2!r}: {err}')
-            if self.order_combo.currentText().startswith('Широта'):
+                raise ValueError(f"Коорд.2 = {v2!r}: {err}")
+            if self.order_combo.currentText().startswith("Широта"):
                 lat, lon = a, b
             else:
                 lat, lon = b, a
@@ -3708,44 +3881,48 @@ class ImportDialog(QDialog):
 
         # --- ГМС в трёх колонках ---
         if fmt == FMT_HMS_THREE:
-            cols = [self._col_index(self.c1d), self._col_index(self.c1m),
-                    self._col_index(self.c1s),
-                    self._col_index(self.c2d), self._col_index(self.c2m),
-                    self._col_index(self.c2s)]
+            cols = [
+                self._col_index(self.c1d),
+                self._col_index(self.c1m),
+                self._col_index(self.c1s),
+                self._col_index(self.c2d),
+                self._col_index(self.c2m),
+                self._col_index(self.c2s),
+            ]
             if any(c < 0 for c in cols):
-                raise ValueError('не все колонки ГМС выбраны')
+                raise ValueError("не все колонки ГМС выбраны")
             vals = [self._cell(row, c) for c in cols]
             nums = [_num(v) for v in vals]
             for i, v in enumerate(vals):
                 if nums[i] is None:
-                    raise ValueError(f'Коорд.{i+1} = {v!r} — не число')
+                    raise ValueError(f"Коорд.{i + 1} = {v!r} — не число")
             a, err = _hms_to_dec(nums[0], nums[1], nums[2])
             if a is None:
-                raise ValueError(f'Коорд.1: {err}')
+                raise ValueError(f"Коорд.1: {err}")
             b, err = _hms_to_dec(nums[3], nums[4], nums[5])
             if b is None:
-                raise ValueError(f'Коорд.2: {err}')
-            if self.order_combo.currentText().startswith('Широта'):
+                raise ValueError(f"Коорд.2: {err}")
+            if self.order_combo.currentText().startswith("Широта"):
                 lat, lon = a, b
             else:
                 lat, lon = b, a
             return lon, lat
 
-        raise ValueError('неизвестный формат координат')
+        raise ValueError("неизвестный формат координат")
 
     def _display_values(self, east_or_lon, north_or_lat):
         """Приводит (east, north)/(lon, lat) к порядку отображения."""
         labels = self._axis_labels()
         units = self._current_units()
-        if units == 'degrees':
+        if units == "degrees":
             lon, lat = east_or_lon, north_or_lat
-            if labels[0] == 'Широта':
+            if labels[0] == "Широта":
                 return lat, lon
             else:
                 return lon, lat
         else:
             east, north = east_or_lon, north_or_lat
-            if labels[0] == 'Север':
+            if labels[0] == "Север":
                 return north, east
             else:
                 return east, north
@@ -3782,15 +3959,23 @@ class ImportDialog(QDialog):
         self.preview.clear()
 
         # Единицы и подписи колонок — по СК файла.
-        crs = self.spatial_data[0]['layer'].crs()
+        crs = self.spatial_data[0]["layer"].crs()
         is_geo = crs.isGeographic() if crs and crs.isValid() else False
         if is_geo:
-            c1_label, c2_label = 'Широта', 'Долгота'
+            c1_label, c2_label = "Широта", "Долгота"
         else:
-            c1_label, c2_label = 'Север', 'Восток'
+            c1_label, c2_label = "Север", "Восток"
 
-        headers = ['№', '№верш', 'Тип', c1_label, c2_label,
-                   'Площадь, м²', 'Площадь, га', 'Периметр/длина, м']
+        headers = [
+            "№",
+            "№верш",
+            "Тип",
+            c1_label,
+            c2_label,
+            "Площадь, м²",
+            "Площадь, га",
+            "Периметр/длина, м",
+        ]
         self.preview.setColumnCount(len(headers))
         self.preview.setHorizontalHeaderLabels(headers)
 
@@ -3802,20 +3987,20 @@ class ImportDialog(QDialog):
         num = 0
 
         for part in self.spatial_data:
-            base = QgsWkbTypes.geometryType(part['wkb'])
-            if base == QgsWkbTypes.PointGeometry:
-                type_label = 'Точка'
-            elif base == QgsWkbTypes.LineGeometry:
-                type_label = 'Линия'
+            base = QgsWkbTypes.geometryType(part["wkb"])
+            if base == _QgsWkbTypesGeom_Point:
+                type_label = "Точка"
+            elif base == _QgsWkbTypesGeom_Line:
+                type_label = "Линия"
             else:
-                type_label = 'Полигон'
+                type_label = "Полигон"
 
             # Между группами разных типов (точки/линии/полигоны)
             # ставим серый разделитель, если это не первая группа.
             if display:
-                display.append(('divider',))
+                display.append(("divider",))
 
-            for f in part['features']:
+            for f in part["features"]:
                 num += 1
                 g = f.geometry()
                 if g is None or g.isEmpty():
@@ -3827,16 +4012,16 @@ class ImportDialog(QDialog):
                     continue
 
                 # Свойства объекта — считаем один раз.
-                if base == QgsWkbTypes.PolygonGeometry:
+                if base == _QgsWkbTypesGeom_Polygon:
                     area_m2 = _geom_area_m2(g, units)
                     area_ha = area_m2 / 10000.0
                     per_m = _geom_length_m(g, units)
-                    props = (f'{area_m2:.2f}', f'{area_ha:.4f}', f'{per_m:.2f}')
-                elif base == QgsWkbTypes.LineGeometry:
+                    props = (f"{area_m2:.2f}", f"{area_ha:.4f}", f"{per_m:.2f}")
+                elif base == _QgsWkbTypesGeom_Line:
                     length_m = _geom_length_m(g, units)
-                    props = ('', '', f'{length_m:.2f}')
+                    props = ("", "", f"{length_m:.2f}")
                 else:
-                    props = ('', '', '')
+                    props = ("", "", "")
 
                 # Сколько вершин показывать и сколько скрыть.
                 show_count = min(len(verts), MAX_VERTICES_PER_OBJECT)
@@ -3849,20 +4034,27 @@ class ImportDialog(QDialog):
 
                     if vi == 0:
                         # Первая вершина — с площадью и периметром.
-                        display.append((
-                            str(num), '1', type_label, c1_s, c2_s,
-                            props[0], props[1], props[2]
-                        ))
+                        display.append(
+                            (
+                                str(num),
+                                "1",
+                                type_label,
+                                c1_s,
+                                c2_s,
+                                props[0],
+                                props[1],
+                                props[2],
+                            )
+                        )
                     else:
                         # Остальные вершины — только координаты.
-                        display.append((
-                            str(num), str(vi + 1), type_label, c1_s, c2_s,
-                            '', '', ''
-                        ))
+                        display.append(
+                            (str(num), str(vi + 1), type_label, c1_s, c2_s, "", "", "")
+                        )
 
                 # Если объект длинный — добавим строку-заглушку.
                 if hidden > 0:
-                    display.append(('skipped', hidden))
+                    display.append(("skipped", hidden))
 
         # --- Отрисовка ---
         self.preview.setRowCount(len(display))
@@ -3870,17 +4062,25 @@ class ImportDialog(QDialog):
 
         for i, row_data in enumerate(display):
             # Серая строка-разделитель между группами типов.
-            if isinstance(row_data, tuple) and len(row_data) == 1 and row_data[0] == 'divider':
+            if (
+                isinstance(row_data, tuple)
+                and len(row_data) == 1
+                and row_data[0] == "divider"
+            ):
                 for j in range(len(headers)):
-                    item = QTableWidgetItem('———')
+                    item = QTableWidgetItem("———")
                     item.setBackground(QColor(225, 225, 225))
                     self.preview.setItem(i, j, item)
                 continue
 
             # Строка «... скрыто вершин: N ...».
-            if isinstance(row_data, tuple) and len(row_data) == 2 and row_data[0] == 'skipped':
+            if (
+                isinstance(row_data, tuple)
+                and len(row_data) == 2
+                and row_data[0] == "skipped"
+            ):
                 count = row_data[1]
-                item = QTableWidgetItem(f'... скрыто вершин: {count} ...')
+                item = QTableWidgetItem(f"... скрыто вершин: {count} ...")
                 item.setBackground(QColor(240, 240, 240))
                 item.setForeground(QColor(120, 120, 120))
                 self.preview.setItem(i, 0, item)
@@ -3899,7 +4099,7 @@ class ImportDialog(QDialog):
             self.preview.setColumnWidth(j, 110)
 
         self.preview.blockSignals(False)
-   
+
     def _fill_preview(self):
         """Обновляет таблицу предпросмотра (единый вид).
 
@@ -3923,7 +4123,7 @@ class ImportDialog(QDialog):
                 try:
                     x, y = self._get_xy(row)
                     pblock.append((x, y, row))
-                except Exception:
+                except ValueError:
                     pblock.append((0, 0, row))
             parsed_blocks.append(pblock)
 
@@ -3933,7 +4133,7 @@ class ImportDialog(QDialog):
         objects_data = self._build_objects_data(parsed_blocks, wkb)
         row_to_obj = {}
         for ob in objects_data:
-            for r in ob['rows']:
+            for r in ob["rows"]:
                 row_to_obj[id(r)] = ob
 
         # --- Собираем объекты (группировка по obj_num) ---
@@ -3979,14 +4179,19 @@ class ImportDialog(QDialog):
                     display.append(loc)
                     self._preview_map.append(loc)
                 # Маркер пропуска. Хранится как спец-кортеж.
-                display.append(('skipped', len(obj_rows) - MAX_VERTICES_PER_OBJECT))
+                display.append(("skipped", len(obj_rows) - MAX_VERTICES_PER_OBJECT))
                 self._preview_map.append(None)
 
         labels = self._axis_labels()
         headers = list(self.headers) + [
-            '→ №', '→ №верш', '→ Тип',
-            f'→ {labels[0]}', f'→ {labels[1]}',
-            '→ Площадь, м²', '→ Площадь, га', '→ Периметр/длина, м'
+            "→ №",
+            "→ №верш",
+            "→ Тип",
+            f"→ {labels[0]}",
+            f"→ {labels[1]}",
+            "→ Площадь, м²",
+            "→ Площадь, га",
+            "→ Периметр/длина, м",
         ]
         self.preview.setColumnCount(len(headers))
         self.preview.setHorizontalHeaderLabels(headers)
@@ -3997,14 +4202,14 @@ class ImportDialog(QDialog):
         for i, loc in enumerate(display):
             if loc is None:
                 for j in range(len(headers)):
-                    item = QTableWidgetItem('———')
+                    item = QTableWidgetItem("———")
                     item.setBackground(QColor(225, 225, 225))
                     self.preview.setItem(i, j, item)
                 continue
 
-            if isinstance(loc, tuple) and len(loc) == 2 and loc[0] == 'skipped':
+            if isinstance(loc, tuple) and len(loc) == 2 and loc[0] == "skipped":
                 count = loc[1]
-                item = QTableWidgetItem(f'... скрыто вершин: {count} ...')
+                item = QTableWidgetItem(f"... скрыто вершин: {count} ...")
                 item.setBackground(QColor(240, 240, 240))
                 item.setForeground(QColor(120, 120, 120))
                 self.preview.setItem(i, 0, item)
@@ -4023,19 +4228,31 @@ class ImportDialog(QDialog):
                 v1, v2 = self._display_values(e_or_lon, n_or_lat)
 
                 if valid_vnum:
-                    obj_num, vnum_str, type_str = meta.get((bi, ri), ('?', '?', '?'))
+                    obj_num, vnum_str, type_str = meta.get((bi, ri), ("?", "?", "?"))
                 else:
-                    obj_num, vnum_str, type_str = '?', '?', '?'
+                    obj_num, vnum_str, type_str = "?", "?", "?"
 
                 ob = row_to_obj.get(id(row))
                 is_first = False
-                if ob and ob['rows'] and ob['rows'][0] is row:
+                if ob and ob["rows"] and ob["rows"][0] is row:
                     is_first = True
 
-                area_m2_s = f"{ob.get('area_m2', 0):.2f}" if is_first and 'area_m2' in ob else ''
-                area_ha_s = f"{ob.get('area_ha', 0):.4f}" if is_first and 'area_ha' in ob else ''
-                length_s = f"{ob.get('perimeter_m', 0):.2f}" if is_first and 'perimeter_m' in ob else ''
-                if is_first and 'length_m' in ob:
+                area_m2_s = (
+                    f"{ob.get('area_m2', 0):.2f}"
+                    if is_first and "area_m2" in ob
+                    else ""
+                )
+                area_ha_s = (
+                    f"{ob.get('area_ha', 0):.4f}"
+                    if is_first and "area_ha" in ob
+                    else ""
+                )
+                length_s = (
+                    f"{ob.get('perimeter_m', 0):.2f}"
+                    if is_first and "perimeter_m" in ob
+                    else ""
+                )
+                if is_first and "length_m" in ob:
                     length_s = f"{ob['length_m']:.2f}"
 
                 items = [
@@ -4046,14 +4263,14 @@ class ImportDialog(QDialog):
                     QTableWidgetItem(self._fmt_value(v2)),
                     QTableWidgetItem(area_m2_s),
                     QTableWidgetItem(area_ha_s),
-                    QTableWidgetItem(length_s)
+                    QTableWidgetItem(length_s),
                 ]
                 for j, item in enumerate(items):
                     item.setFlags(item.flags() & ~_QT_ITEM_EDITABLE)
                     self.preview.setItem(i, len(self.headers) + j, item)
-            except Exception:
+            except (ValueError, TypeError, AttributeError, KeyError):
                 for j in range(8):
-                    item = QTableWidgetItem('—')
+                    item = QTableWidgetItem("—")
                     item.setFlags(item.flags() & ~_QT_ITEM_EDITABLE)
                     self.preview.setItem(i, len(self.headers) + j, item)
 
@@ -4091,9 +4308,9 @@ class ImportDialog(QDialog):
         )
 
         menu = QMenu(self)
-        act_copy = menu.addAction('Копировать')
-        act_add = menu.addAction('Добавить строку')
-        act_del = menu.addAction('Удалить строку')
+        act_copy = menu.addAction("Копировать")
+        act_add = menu.addAction("Добавить строку")
+        act_del = menu.addAction("Удалить строку")
 
         act_copy.setEnabled(preview_row >= 0)
         act_add.setEnabled(is_data_row)
@@ -4112,25 +4329,16 @@ class ImportDialog(QDialog):
 
     def _on_preview_item_changed(self, item):
         """Записывает отредактированное значение ячейки обратно в данные.
-
-        Проблема, которую решает метод:
-            таблица — только представление. Пользователь правит ячейку,
-            QTableWidget обновляется сам, но self.data_blocks — нет.
-            Карта, построенная по data_blocks, остаётся старой.
-
-        Что делает:
-            находит в self._preview_map, к какой строке исходных данных
-            относится ячейка, и записывает туда новый текст. Затем
-            перерисовывает превью-карту, чтобы точка появилась сразу.
+        ...
         """
-        if col >= len(self.headers):
-            return  # вычисленные колонки только для чтения
-    
         if item is None:
             return
 
         row = item.row()
         col = item.column()
+
+        if col >= len(self.headers):
+            return  # вычисленные колонки только для чтения
 
         # Колонка должна быть из исходных данных.
         if col < 0 or col >= len(self.headers):
@@ -4151,7 +4359,7 @@ class ImportDialog(QDialog):
         # Дополняем строку до длины шапки, если была короче.
         block_row = self.data_blocks[bi][ri]
         while len(block_row) <= col:
-            block_row.append('')
+            block_row.append("")
 
         block_row[col] = item.text()
 
@@ -4161,7 +4369,7 @@ class ImportDialog(QDialog):
         # Обновляем предупреждение о СК и карту.
         self._update_crs_warning()
         self._update_map_preview()
-          
+
     def _preview_copy(self):
         """Копирует выделенные ячейки в буфер обмена.
 
@@ -4172,18 +4380,18 @@ class ImportDialog(QDialog):
         if not sel:
             return
 
-        rows = sorted(set(i.row() for i in sel))
-        cols = sorted(set(i.column() for i in sel))
+        rows = sorted({i.row() for i in sel})
+        cols = sorted({i.column() for i in sel})
 
         lines = []
         for r in rows:
             vals = []
             for c in cols:
                 item = self.preview.item(r, c)
-                vals.append(item.text() if item is not None else '')
-            lines.append('\t'.join(vals))
+                vals.append(item.text() if item is not None else "")
+            lines.append("\t".join(vals))
 
-        QApplication.clipboard().setText('\n'.join(lines))
+        QApplication.clipboard().setText("\n".join(lines))
 
     def _preview_add_row(self, preview_row):
         """Вставляет пустую строку после указанной.
@@ -4198,7 +4406,7 @@ class ImportDialog(QDialog):
             return
 
         bi, ri = loc
-        empty = [''] * len(self.headers)
+        empty = [""] * len(self.headers)
         self.data_blocks[bi].insert(ri + 1, empty)
         self._rebuild_after_edit()
 
@@ -4257,11 +4465,12 @@ class ImportDialog(QDialog):
         if not crs.isValid():
             self.crs_frame.setStyleSheet(ERROR_STYLE_FRAME)
             QMessageBox.warning(
-                self, 'Неверная система координат',
-                'Выбранная система координат не распознана QGIS.\n\n'
-                'Проверьте выбор исходной СК — откройте список и укажите '
-                'правильную. Если ваша СК отсутствует в списке, добавьте '
-                'её через «Настройки → Свои СК» и выберите здесь.'
+                self,
+                "Неверная система координат",
+                "Выбранная система координат не распознана QGIS.\n\n"
+                "Проверьте выбор исходной СК — откройте список и укажите "
+                "правильную. Если ваша СК отсутствует в списке, добавьте "
+                "её через «Настройки → Свои СК» и выберите здесь.",
             )
             return False
 
@@ -4270,25 +4479,30 @@ class ImportDialog(QDialog):
         crs_is_geographic = crs.isGeographic()
 
         warn = None
-        if units == 'degrees' and not crs_is_geographic:
-            warn = ('Данные похожи на градусы (значения ≤ 180), '
-                    'а выбранная СК — проекционная (в метрах).\n\n'
-                    'Возможно, выбранная СК не подходит.\n\n'
-                    'Продолжить импорт?')
-        elif units == 'meters' and crs_is_geographic:
-            warn = ('Данные похожи на метры (значения > 180), '
-                    'а выбранная СК — географическая (в градусах).\n\n'
-                    'Возможно, выбранная СК не подходит.\n\n'
-                    'Продолжить импорт?')
+        if units == "degrees" and not crs_is_geographic:
+            warn = (
+                "Данные похожи на градусы (значения ≤ 180), "
+                "а выбранная СК — проекционная (в метрах).\n\n"
+                "Возможно, выбранная СК не подходит.\n\n"
+                "Продолжить импорт?"
+            )
+        elif units == "meters" and crs_is_geographic:
+            warn = (
+                "Данные похожи на метры (значения > 180), "
+                "а выбранная СК — географическая (в градусах).\n\n"
+                "Возможно, выбранная СК не подходит.\n\n"
+                "Продолжить импорт?"
+            )
 
         if warn:
             ans = QMessageBox.question(
-                self, 'Проверьте систему координат',
+                self,
+                "Проверьте систему координат",
                 warn,
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No
+                _QMessageBox_Yes | _QMessageBox_No,
+                _QMessageBox_No,
             )
-            if ans != QMessageBox.Yes:
+            if ans != _QMessageBox_Yes:
                 self.crs_frame.setStyleSheet(ERROR_STYLE_FRAME)
                 return False
 
@@ -4313,17 +4527,20 @@ class ImportDialog(QDialog):
             return
 
         if not self.data_blocks:
-            QMessageBox.warning(self, 'Нет данных',
-                                'Сначала загрузи данные из буфера или файла')
+            QMessageBox.warning(
+                self, "Нет данных", "Сначала загрузи данные из буфера или файла"
+            )
             return
 
         # --- Путь сохранения ---
         save_to_file = self.cb_save_file.isChecked()
         save_path = self.save_path_edit.text().strip()
         if save_to_file and not save_path:
-            QMessageBox.warning(self, 'Нет пути сохранения',
-                                'Укажите путь к .gpkg или снимите галочку '
-                                '«Сохранить в файл».')
+            QMessageBox.warning(
+                self,
+                "Нет пути сохранения",
+                "Укажите путь к .gpkg или снимите галочку «Сохранить в файл».",
+            )
             return
 
         # --- Проверка СК (уровни 1 и 2) ---
@@ -4356,30 +4573,29 @@ class ImportDialog(QDialog):
             parsed_blocks.append(pblock)
 
         if errors:
-            msg = 'Найдены ошибки в данных:\n\n'
+            msg = "Найдены ошибки в данных:\n\n"
             for n, e in errors:
-                msg += f'• Строка {n}: {e}\n'
+                msg += f"• Строка {n}: {e}\n"
             if len(errors) >= 10:
-                msg += '\n(показаны первые 10 ошибок)'
-            msg += '\n\nШаблоны координат:\n'
+                msg += "\n(показаны первые 10 ошибок)"
+            msg += "\n\nШаблоны координат:\n"
             msg += "  • десятичные: 55.7244\t36.3638\n"
             msg += "  • ГМС одной колонкой: 55°43'28.05\"\t36°21'49.94\"\n"
             msg += "  • ГМС тремя колонками: 55\t43\t28.05\t36\t21\t49.94\n"
-            msg += '\nИсправьте исходные данные и загрузите заново.'
-            QMessageBox.warning(self, 'Ошибки в данных', msg)
+            msg += "\nИсправьте исходные данные и загрузите заново."
+            QMessageBox.warning(self, "Ошибки в данных", msg)
             return
 
         if not any(parsed_blocks):
-            QMessageBox.warning(self, 'Пусто',
-                                'Не удалось построить ни одного объекта')
+            QMessageBox.warning(self, "Пусто", "Не удалось построить ни одного объекта")
             return
 
         # --- Создание слоёв ---
         geom_name = self.geom_combo.currentText()
         wkb = GEOM_WKB[geom_name]
         uri_geom = GEOM_URI[geom_name]
-        is_point = (wkb == QgsWkbTypes.Point)
-        is_poly = wkb in (QgsWkbTypes.Polygon, QgsWkbTypes.MultiPolygon)
+        is_point = wkb == _QgsWkbTypesType_Point
+        is_poly = wkb in (_QgsWkbTypesType_Polygon, _QgsWkbTypesType_MultiPolygon)
 
         want_vertices = self.cb_vertices.isChecked() and not is_point
         want_numbering = self.cb_numbering.isChecked()
@@ -4390,8 +4606,7 @@ class ImportDialog(QDialog):
         main_layer = self._make_layer(uri_geom, crs, layer_name)
         feats, vertex_points = self._build_features(main_layer, wkb, parsed_blocks)
         if not feats:
-            QMessageBox.warning(self, 'Пусто',
-                                'Не удалось построить ни одного объекта')
+            QMessageBox.warning(self, "Пусто", "Не удалось построить ни одного объекта")
             return
         self._fill_layer(main_layer, feats)
 
@@ -4400,11 +4615,13 @@ class ImportDialog(QDialog):
         if save_to_file:
             ok, err = self._save_layer_to_gpkg(main_layer, save_path, layer_name)
             if not ok:
-                QMessageBox.critical(self, 'Ошибка сохранения',
-                                     f'Не удалось сохранить слой:\n{err}')
+                QMessageBox.critical(
+                    self, "Ошибка сохранения", f"Не удалось сохранить слой:\n{err}"
+                )
                 return
             loaded = QgsVectorLayer(
-                f'{save_path}|layername={layer_name}', layer_name, 'ogr')
+                f"{save_path}|layername={layer_name}", layer_name, "ogr"
+            )
             if loaded.isValid():
                 final_main = loaded
 
@@ -4413,27 +4630,25 @@ class ImportDialog(QDialog):
             _apply_polygon_style(
                 final_main,
                 self.poly_style.currentText(),
-                outline_color=ds.get('poly_outline_color',
-                                     QColor(0, 0, 0, 255)),
-                outline_width=ds.get('poly_outline_width', 2) * 0.5,
-                fill_color=ds.get('poly_fill_color',
-                                  QColor(150, 150, 150, 128))
+                outline_color=ds.get("poly_outline_color", QColor(0, 0, 0, 255)),
+                outline_width=ds.get("poly_outline_width", 2) * 0.5,
+                fill_color=ds.get("poly_fill_color", QColor(150, 150, 150, 128)),
             )
         if is_point and want_numbering:
-            num_color = ds.get('num_label_color', QColor(0, 0, 0, 255))
+            num_color = ds.get("num_label_color", QColor(0, 0, 0, 255))
             _enable_number_labels(
                 final_main,
-                color=f'{num_color.red()},{num_color.green()},'
-                      f'{num_color.blue()},{num_color.alpha()}',
-                size=ds.get('num_label_size', 10)
+                color=f"{num_color.red()},{num_color.green()},"
+                f"{num_color.blue()},{num_color.alpha()}",
+                size=ds.get("num_label_size", 10),
             )
 
         QgsProject.instance().addMapLayer(final_main)
 
         # --- Слой вершин ---
         if need_vertex_layer and vertex_points:
-            v_name = f'{layer_name} — вершины'
-            v_layer = self._make_layer('Point', crs, v_name, vertex_only=True)
+            v_name = f"{layer_name} — вершины"
+            v_layer = self._make_layer("Point", crs, v_name, vertex_only=True)
             v_feats = []
             for v_idx, pt in vertex_points:
                 f = QgsFeature(v_layer.fields())
@@ -4448,7 +4663,8 @@ class ImportDialog(QDialog):
                 ok, err = self._save_layer_to_gpkg(v_layer, save_path, v_name)
                 if ok:
                     loaded = QgsVectorLayer(
-                        f'{save_path}|layername={v_name}', v_name, 'ogr')
+                        f"{save_path}|layername={v_name}", v_name, "ogr"
+                    )
                     if loaded.isValid():
                         final_vertex = loaded
 
@@ -4456,8 +4672,7 @@ class ImportDialog(QDialog):
                 _enable_number_labels(final_vertex)
             QgsProject.instance().addMapLayer(final_vertex)
 
-        self.iface.messageBar().pushSuccess(
-            'Импорт', f'Готово. Объектов: {len(feats)}')
+        self.iface.messageBar().pushSuccess("Импорт", f"Готово. Объектов: {len(feats)}")
         self.accept()
 
     def _import_spatial(self, layer_name):
@@ -4477,61 +4692,66 @@ class ImportDialog(QDialog):
         save_to_file = self.cb_save_file.isChecked()
         save_path = self.save_path_edit.text().strip()
         if save_to_file and not save_path:
-            QMessageBox.warning(self, 'Нет пути сохранения',
-                                'Укажите путь к .gpkg или снимите галочку '
-                                '«Сохранить в файл».')
+            QMessageBox.warning(
+                self,
+                "Нет пути сохранения",
+                "Укажите путь к .gpkg или снимите галочку «Сохранить в файл».",
+            )
             return
 
         if not self.spatial_data:
-            QMessageBox.warning(self, 'Нет данных',
-                                'Сначала загрузи пространственный файл.')
+            QMessageBox.warning(
+                self, "Нет данных", "Сначала загрузи пространственный файл."
+            )
             return
 
-        crs = self.spatial_data[0]['layer'].crs()
+        crs = self.spatial_data[0]["layer"].crs()
         units = self._current_units()
         added = 0
 
         suffix_map = {
-            QgsWkbTypes.PointGeometry: 'точки',
-            QgsWkbTypes.LineGeometry: 'линии',
-            QgsWkbTypes.PolygonGeometry: 'полигоны',
+            _QgsWkbTypesGeom_Point: "точки",
+            _QgsWkbTypesGeom_Line: "линии",
+            _QgsWkbTypesGeom_Polygon: "полигоны",
         }
 
         # Разделяем на выходные слои по каждому типу.
         for idx, part in enumerate(self.spatial_data, 1):
-            base = QgsWkbTypes.geometryType(part['wkb'])
-            suffix = suffix_map.get(base, f'слой{idx}')
-            out_name = f'{layer_name} — {suffix}'
+            base = QgsWkbTypes.geometryType(part["wkb"])
+            suffix = suffix_map.get(base, f"слой{idx}")
+            out_name = f"{layer_name} — {suffix}"
 
             # Источник полей — держатель из _read_spatial_via_ogr.
-            src_layer = part['layer']
+            src_layer = part["layer"]
             src_fields = src_layer.fields()
 
             # Итоговый memory-слой с СК источника.
-            wkb_str = QgsWkbTypes.displayString(part['wkb'])
-            uri = f'{wkb_str}?crs={crs.authid()}'
-            out = QgsVectorLayer(uri, out_name, 'memory')
+            wkb_str = QgsWkbTypes.displayString(part["wkb"])
+            uri = f"{wkb_str}?crs={crs.authid()}"
+            out = QgsVectorLayer(uri, out_name, "memory")
             op = out.dataProvider()
 
             # Копируем исходные поля.
             op.addAttributes([QgsField(f.name(), f.type()) for f in src_fields])
 
             # Добавляем наши расчётные поля поверх.
-            op.addAttributes([QgsField('num', T_INT)])
-            if base == QgsWkbTypes.PolygonGeometry:
-                op.addAttributes([
-                    QgsField('area_m2', T_DOUBLE),
-                    QgsField('area_ha', T_DOUBLE),
-                    QgsField('perimeter_m', T_DOUBLE),
-                ])
-            elif base == QgsWkbTypes.LineGeometry:
-                op.addAttributes([QgsField('length_m', T_DOUBLE)])
+            op.addAttributes([QgsField("num", T_INT)])
+            if base == _QgsWkbTypesGeom_Polygon:
+                op.addAttributes(
+                    [
+                        QgsField("area_m2", T_DOUBLE),
+                        QgsField("area_ha", T_DOUBLE),
+                        QgsField("perimeter_m", T_DOUBLE),
+                    ]
+                )
+            elif base == _QgsWkbTypesGeom_Line:
+                op.addAttributes([QgsField("length_m", T_DOUBLE)])
             out.updateFields()
 
             num_src = len(src_fields)
             new_feats = []
             num = 0
-            for f in part['features']:
+            for f in part["features"]:
                 g = f.geometry()
                 if g is None or g.isEmpty():
                     continue
@@ -4543,11 +4763,11 @@ class ImportDialog(QDialog):
                 # Исходные атрибуты + наши в нужном порядке.
                 attrs = [f[i] for i in range(num_src)]
                 attrs.append(num)
-                if base == QgsWkbTypes.PolygonGeometry:
+                if base == _QgsWkbTypesGeom_Polygon:
                     area_m2 = _geom_area_m2(g, units)
                     per_m = _geom_length_m(g, units)
                     attrs.extend([area_m2, area_m2 / 10000.0, per_m])
-                elif base == QgsWkbTypes.LineGeometry:
+                elif base == _QgsWkbTypesGeom_Line:
                     attrs.append(_geom_length_m(g, units))
                 nf.setAttributes(attrs)
                 new_feats.append(nf)
@@ -4559,34 +4779,32 @@ class ImportDialog(QDialog):
 
             ds = self.display_settings
             # Стиль полигона.
-            if base == QgsWkbTypes.PolygonGeometry:
+            if base == _QgsWkbTypesGeom_Polygon:
                 _apply_polygon_style(
                     out,
                     self.poly_style.currentText(),
-                    outline_color=ds.get('poly_outline_color',
-                                         QColor(0, 0, 0, 255)),
-                    outline_width=ds.get('poly_outline_width', 2) * 0.5,
-                    fill_color=ds.get('poly_fill_color',
-                                      QColor(150, 150, 150, 128))
+                    outline_color=ds.get("poly_outline_color", QColor(0, 0, 0, 255)),
+                    outline_width=ds.get("poly_outline_width", 2) * 0.5,
+                    fill_color=ds.get("poly_fill_color", QColor(150, 150, 150, 128)),
                 )
 
             # Подписи номеров — если включена нумерация.
             if self.cb_numbering.isChecked():
-                num_color = ds.get('num_label_color',
-                                   QColor(0, 0, 0, 255))
+                num_color = ds.get("num_label_color", QColor(0, 0, 0, 255))
                 _enable_number_labels(
                     out,
-                    color=f'{num_color.red()},{num_color.green()},'
-                          f'{num_color.blue()},{num_color.alpha()}',
-                    size=ds.get('num_label_size', 10)
+                    color=f"{num_color.red()},{num_color.green()},"
+                    f"{num_color.blue()},{num_color.alpha()}",
+                    size=ds.get("num_label_size", 10),
                 )
             # Сохранение в GeoPackage.
             final = out
             if save_to_file:
-                ok, err = self._save_layer_to_gpkg(out, save_path, out_name)
+                ok, _err = self._save_layer_to_gpkg(out, save_path, out_name)
                 if ok:
                     loaded = QgsVectorLayer(
-                        f'{save_path}|layername={out_name}', out_name, 'ogr')
+                        f"{save_path}|layername={out_name}", out_name, "ogr"
+                    )
                     if loaded.isValid():
                         final = loaded
 
@@ -4594,12 +4812,10 @@ class ImportDialog(QDialog):
             added += 1
 
         if added == 0:
-            QMessageBox.warning(self, 'Пусто',
-                                'Не удалось собрать ни одного слоя.')
+            QMessageBox.warning(self, "Пусто", "Не удалось собрать ни одного слоя.")
             return
 
-        self.iface.messageBar().pushSuccess(
-            'Импорт', f'Добавлено слоёв: {added}')
+        self.iface.messageBar().pushSuccess("Импорт", f"Добавлено слоёв: {added}")
         self.accept()
 
     def _make_layer(self, uri_geom, crs, name, vertex_only=False):
@@ -4612,34 +4828,42 @@ class ImportDialog(QDialog):
 
         Слой вершин (vertex_only=True) получает только num и vertex.
         """
-        uri = f'{uri_geom}?crs={crs.authid()}'
-        layer = QgsVectorLayer(uri, name, 'memory')
+        uri = f"{uri_geom}?crs={crs.authid()}"
+        layer = QgsVectorLayer(uri, name, "memory")
         prov = layer.dataProvider()
 
         if vertex_only:
-            prov.addAttributes([
-                QgsField('num', T_INT),
-                QgsField('vertex', T_STRING),  # поддерживает "A-12" и текст
-            ])
-        elif uri_geom in ('Polygon', 'MultiPolygon'):
-            prov.addAttributes([
-                QgsField('num', T_INT),
-                QgsField('z', T_DOUBLE),
-                QgsField('area_m2', T_DOUBLE),
-                QgsField('area_ha', T_DOUBLE),
-                QgsField('perimeter_m', T_DOUBLE),
-            ])
-        elif uri_geom == 'LineString':
-            prov.addAttributes([
-                QgsField('num', T_INT),
-                QgsField('z', T_DOUBLE),
-                QgsField('length_m', T_DOUBLE),
-            ])
+            prov.addAttributes(
+                [
+                    QgsField("num", T_INT),
+                    QgsField("vertex", T_STRING),  # поддерживает "A-12" и текст
+                ]
+            )
+        elif uri_geom in ("Polygon", "MultiPolygon"):
+            prov.addAttributes(
+                [
+                    QgsField("num", T_INT),
+                    QgsField("z", T_DOUBLE),
+                    QgsField("area_m2", T_DOUBLE),
+                    QgsField("area_ha", T_DOUBLE),
+                    QgsField("perimeter_m", T_DOUBLE),
+                ]
+            )
+        elif uri_geom == "LineString":
+            prov.addAttributes(
+                [
+                    QgsField("num", T_INT),
+                    QgsField("z", T_DOUBLE),
+                    QgsField("length_m", T_DOUBLE),
+                ]
+            )
         else:
-            prov.addAttributes([
-                QgsField('num', T_INT),
-                QgsField('z', T_DOUBLE),
-            ])
+            prov.addAttributes(
+                [
+                    QgsField("num", T_INT),
+                    QgsField("z", T_DOUBLE),
+                ]
+            )
 
         layer.updateFields()
         return layer
@@ -4653,20 +4877,19 @@ class ImportDialog(QDialog):
     def _save_layer_to_gpkg(self, layer, path, layer_name):
         """Пишет слой в GeoPackage. Возвращает (успех, сообщение)."""
         options = QgsVectorFileWriter.SaveVectorOptions()
-        options.driverName = 'GPKG'
+        options.driverName = "GPKG"
         options.layerName = layer_name
         if os.path.exists(path):
-            options.actionOnExistingFile = \
-                QgsVectorFileWriter.CreateOrOverwriteLayer
+            options.actionOnExistingFile = _QgsVectorFileWriter_Action
         try:
             res = QgsVectorFileWriter.writeAsVectorFormatV3(
                 layer, path, QgsProject.instance().transformContext(), options
             )
             err_code = res[0]
-            if err_code != QgsVectorFileWriter.NoError:
+            if err_code != _QgsVectorFileWriter_Error:
                 return False, str(res)
-            return True, ''
-        except Exception as e:
+            return True, ""
+        except Exception as e:  # noqa: BLE001 — QgsVectorFileWriter бросает всё
             return False, str(e)
 
     def _split_polygon_points(self, points):
@@ -4693,7 +4916,7 @@ class ImportDialog(QDialog):
         if len(current) >= 3:
             groups.append(current)
         return groups
-    
+
     def _calculate_meta(self, parsed_blocks, wkb):
         """Вычисляет номера объектов и вершин для всех строк.
 
@@ -4705,11 +4928,9 @@ class ImportDialog(QDialog):
         row_vnum = {}
         obj_num = 1
         global_vnum = 1
-        mode = self.vnum_mode_combo.currentText()
-
-        is_point = (wkb == QgsWkbTypes.Point)
-        is_poly = wkb in (QgsWkbTypes.Polygon, QgsWkbTypes.MultiPolygon)
-        is_line = (wkb == QgsWkbTypes.LineString)
+        is_point = wkb == _QgsWkbTypesType_Point
+        is_poly = wkb in (_QgsWkbTypesType_Polygon, _QgsWkbTypesType_MultiPolygon)
+        is_line = wkb == _QgsWkbTypesType_LineString
 
         for bi, block in enumerate(parsed_blocks):
             if not block:
@@ -4718,7 +4939,7 @@ class ImportDialog(QDialog):
             if is_point:
                 for ri, (x, y, row) in enumerate(block):
                     vnum_str = self._get_vertex_number(row, 1, global_vnum)
-                    meta[(bi, ri)] = (obj_num, vnum_str, 'Точка')
+                    meta[(bi, ri)] = (obj_num, vnum_str, "Точка")
                     row_vnum[id(row)] = vnum_str
                     obj_num += 1
                     global_vnum += 1
@@ -4733,7 +4954,7 @@ class ImportDialog(QDialog):
                     local_vnum = 1
                     for x, y, row, ri in pts:
                         vnum_str = self._get_vertex_number(row, local_vnum, global_vnum)
-                        meta[(bi, ri)] = (obj_num, vnum_str, 'Полигон')
+                        meta[(bi, ri)] = (obj_num, vnum_str, "Полигон")
                         row_vnum[id(row)] = vnum_str
                         local_vnum += 1
                         global_vnum += 1
@@ -4743,7 +4964,7 @@ class ImportDialog(QDialog):
                 local_vnum = 1
                 for ri, (x, y, row) in enumerate(block):
                     vnum_str = self._get_vertex_number(row, local_vnum, global_vnum)
-                    meta[(bi, ri)] = (obj_num, vnum_str, 'Линия')
+                    meta[(bi, ri)] = (obj_num, vnum_str, "Линия")
                     row_vnum[id(row)] = vnum_str
                     local_vnum += 1
                     global_vnum += 1
@@ -4762,17 +4983,19 @@ class ImportDialog(QDialog):
         """
         objects = []
         units = self._current_units()
-        is_poly = wkb in (QgsWkbTypes.Polygon, QgsWkbTypes.MultiPolygon)
-        is_line = (wkb == QgsWkbTypes.LineString)
+        is_poly = wkb in (_QgsWkbTypesType_Polygon, _QgsWkbTypesType_MultiPolygon)
+        is_line = wkb == _QgsWkbTypesType_LineString
 
-        if wkb == QgsWkbTypes.Point:
+        if wkb == _QgsWkbTypesType_Point:
             for block in parsed_blocks:
                 for x, y, row in block:
-                    objects.append({
-                        'obj_num': len(objects) + 1,
-                        'geom': QgsGeometry.fromPointXY(QgsPointXY(x, y)),
-                        'rows': [row],
-                    })
+                    objects.append(
+                        {
+                            "obj_num": len(objects) + 1,
+                            "geom": QgsGeometry.fromPointXY(QgsPointXY(x, y)),
+                            "rows": [row],
+                        }
+                    )
             return objects
 
         obj_num = 0
@@ -4804,23 +5027,19 @@ class ImportDialog(QDialog):
                     continue
 
                 obj_num += 1
-                ob = {
-                    'obj_num': obj_num,
-                    'geom': geom,
-                    'rows': [r for _, _, r in pts]
-                }
+                ob = {"obj_num": obj_num, "geom": geom, "rows": [r for _, _, r in pts]}
                 if is_poly:
                     a = _geom_area_m2(geom, units)
-                    ob['area_m2'] = a
-                    ob['area_ha'] = a / 10000.0
-                    ob['perimeter_m'] = _geom_length_m(geom, units)
+                    ob["area_m2"] = a
+                    ob["area_ha"] = a / 10000.0
+                    ob["perimeter_m"] = _geom_length_m(geom, units)
                 elif is_line:
-                    ob['length_m'] = _geom_length_m(geom, units)
+                    ob["length_m"] = _geom_length_m(geom, units)
 
                 objects.append(ob)
 
         return objects
-    
+
     def _build_features(self, layer, wkb, parsed_blocks):
         """Собирает объекты для основного слоя и список вершин."""
         feats = []
@@ -4828,13 +5047,13 @@ class ImportDialog(QDialog):
         units = self._current_units()
         meta, row_vnum = self._calculate_meta(parsed_blocks, wkb)
 
-        is_poly = wkb in (QgsWkbTypes.Polygon, QgsWkbTypes.MultiPolygon)
-        is_line = (wkb == QgsWkbTypes.LineString)
+        is_poly = wkb in (_QgsWkbTypesType_Polygon, _QgsWkbTypesType_MultiPolygon)
+        is_line = wkb == _QgsWkbTypesType_LineString
 
-        if wkb == QgsWkbTypes.Point:
+        if wkb == _QgsWkbTypesType_Point:
             for bi, block in enumerate(parsed_blocks):
                 for ri, (x, y, row) in enumerate(block):
-                    obj_num, _, _ = meta.get((bi, ri), (1, '1', 'Точка'))
+                    obj_num, _, _ = meta.get((bi, ri), (1, "1", "Точка"))
                     f = QgsFeature(layer.fields())
                     f.setGeometry(QgsGeometry.fromPointXY(QgsPointXY(x, y)))
                     f.setAttributes([obj_num, None])
@@ -4853,15 +5072,15 @@ class ImportDialog(QDialog):
                 sub_groups = [pts_xyz]
 
             for pts in sub_groups:
-                if wkb == QgsWkbTypes.LineString and len(pts) < 2:
+                if wkb == _QgsWkbTypesType_LineString and len(pts) < 2:
                     continue
                 if is_poly and len(pts) < 3:
                     continue
 
                 ring = [QgsPointXY(x, y) for x, y, _ in pts]
-                if wkb == QgsWkbTypes.LineString:
+                if wkb == _QgsWkbTypesType_LineString:
                     geom = QgsGeometry.fromPolylineXY(ring)
-                elif wkb == QgsWkbTypes.Polygon:
+                elif wkb == _QgsWkbTypesType_Polygon:
                     geom = QgsGeometry.fromPolygonXY([ring])
                 else:
                     geom = QgsGeometry.fromMultiPolygonXY([[ring]])
@@ -4887,7 +5106,7 @@ class ImportDialog(QDialog):
                 feats.append(f)
 
                 for x, y, row in pts:
-                    vnum_str = row_vnum.get(id(row), '?')
+                    vnum_str = row_vnum.get(id(row), "?")
                     vertex_points.append((vnum_str, QgsPointXY(x, y)))
 
         return feats, vertex_points

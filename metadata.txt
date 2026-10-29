@@ -12,7 +12,7 @@ description=Import and validate coordinates from text, Excel, and spatial files 
 description[ru]=Импорт и проверка координат из текста, Excel и пространственных файлов в векторные слои QGIS.
 
 ; --- Версия плагина ---
-version=0.15.15
+version=0.15.16
 
 ; --- Автор ---
 author=Shershavin D.

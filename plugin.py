@@ -1,20 +1,3 @@
-# KYB_import_coords — плагин импорта пространственных данных для QGIS.
-# Copyright (C) 2026 Шершавин Д.
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program. If not, see <https://www.gnu.org/licenses/>.
-
-# -*- coding: utf-8 -*-
 """
 Плагин KYB_import_coords — точка входа QGIS.
 
@@ -37,22 +20,33 @@ try:
 except ImportError:
     from qgis.PyQt.QtWidgets import QAction
 
+from qgis.core import Qgis, QgsMessageLog
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QToolBar
 
 from .dialog import ImportDialog
 
-
 # Имя панели инструментов, к которой прикрепляется кнопка.
 # Общее для всех инструментов серии KYB — так они собираются
 # в одном месте, а не разбросаны по панелям QGIS.
-TOOLBAR_NAME = 'KYB_TOOLS'
+TOOLBAR_NAME = "KYB_TOOLS"
 
 # Пункт меню «Плагины».
-MENU_NAME = '&Импорт данных'
+MENU_NAME = "&Импорт данных"
 
 # Подпись кнопки.
-ACTION_TEXT = 'Импорт данных'
+ACTION_TEXT = "Импорт данных"
+
+
+def _log_ignored_exception(e, context=""):
+    """Логирует ошибку, которую мы решили проигнорировать.
+
+    Используется вместо голого 'pass' в блоках except —
+    чтобы при сбое было понятно, что пошло не так, но
+    плагин при этом продолжал работу.
+    """
+    msg = f"Проигнорирована ошибка {context}: {type(e).__name__} - {e}"
+    QgsMessageLog.logMessage(msg, "KYB_import_coords", Qgis.Warning)
 
 
 class ImportCoordsPlugin:
@@ -75,12 +69,11 @@ class ImportCoordsPlugin:
         Создаёт QAction, панель KYB_TOOLS (если ещё не создана),
         добавляет кнопку на панель и пункт в меню «Плагины».
         """
-        icon_path = os.path.join(os.path.dirname(__file__), 'icon.png')
+        icon_path = os.path.join(os.path.dirname(__file__), "icon.png")
 
-        self.action = QAction(QIcon(icon_path), ACTION_TEXT,
-                              self.iface.mainWindow())
-        self.action.setObjectName('KYB_import_coords_action')
-        self.action.setToolTip('Импорт и проверка пространственных данных')
+        self.action = QAction(QIcon(icon_path), ACTION_TEXT, self.iface.mainWindow())
+        self.action.setObjectName("KYB_import_coords_action")
+        self.action.setToolTip("Импорт и проверка пространственных данных")
         self.action.triggered.connect(self.run)
 
         # --- Панель KYB_TOOLS ---
@@ -117,8 +110,8 @@ class ImportCoordsPlugin:
             try:
                 if not self.toolbar.actions():
                     self.toolbar.setVisible(False)
-            except Exception:
-                pass
+            except Exception as e:  # noqa: BLE001 — слот не должен ронять плагин
+                _log_ignored_exception(e, "при скрытии пустой панели KYB_TOOLS")
 
     def _find_toolbar(self, name):
         """Ищет панель с данным именем среди панелей главного окна.
@@ -136,18 +129,17 @@ class ImportCoordsPlugin:
             for tb in mw.findChildren(QToolBar):
                 if tb.objectName() == name or tb.windowTitle() == name:
                     return tb
-        except Exception:
-            pass
+        except Exception as e:  # noqa: BLE001 — слот не должен ронять плагин
+            _log_ignored_exception(e, f"при поиске панели '{name}'")
         return None
 
     def run(self):
         """Открывает диалог импорта.
 
-        exec() в Qt6, exec_() в Qt5 — обёртка на hasattr, чтобы
-        работать и в QGIS 3.x, и в 4.x.
+        Используем exec() для Qt6, exec_() для Qt5.
         """
         dlg = ImportDialog(self.iface)
-        if hasattr(dlg, 'exec_'):
-            dlg.exec_()
-        else:
+        if hasattr(dlg, "exec"):
             dlg.exec()
+        else:
+            dlg.exec_()
