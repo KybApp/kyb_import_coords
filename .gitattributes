@@ -3,6 +3,7 @@
 .gitignore export-ignore
 .gitattributes export-ignore
 tests/ export-ignore
+.pre-commit-config.yaml export-ignore
 
 # Python-мусор
 __pycache__/ export-ignore
