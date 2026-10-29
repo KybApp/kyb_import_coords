@@ -63,65 +63,8 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-# ---------- Совместимость констант Qt5 (QGIS 3.x) и Qt6 (QGIS 4.x) ----------
-# В Qt6 часть констант переехала в пространства имён.
-# Пробуем новый путь, при неудаче — старый.
-try:
-    _QPAINTER_ANTIALIASING = QPainter.RenderHint.Antialiasing
-except AttributeError:
-    _QPAINTER_ANTIALIASING = QPainter.Antialiasing
-
-try:
-    _QT_HORIZONTAL = Qt.Orientation.Horizontal
-except AttributeError:
-    _QT_HORIZONTAL = Qt.Horizontal
-
-try:
-    _QT_VERTICAL = Qt.Orientation.Vertical
-except AttributeError:
-    _QT_VERTICAL = Qt.Vertical
-
-try:
-    _QT_CUSTOM_CONTEXT_MENU = Qt.ContextMenuPolicy.CustomContextMenu
-except AttributeError:
-    _QT_CUSTOM_CONTEXT_MENU = Qt.CustomContextMenu
-
-try:
-    _QT_ALIGN_LEFT_BOTTOM = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom
-except AttributeError:
-    _QT_ALIGN_LEFT_BOTTOM = Qt.AlignLeft | Qt.AlignBottom
-
-try:
-    _QT_ALIGN_LEFT_TOP = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop
-except AttributeError:
-    _QT_ALIGN_LEFT_TOP = Qt.AlignLeft | Qt.AlignTop
-
-try:
-    _QT_COLOR_ALPHA = QColorDialog.ColorDialogOption.ShowAlphaChannel
-except AttributeError:
-    _QT_COLOR_ALPHA = QColorDialog.ShowAlphaChannel
-try:
-    _QT_BTN_OK = QDialogButtonBox.StandardButton.Ok
-    _QT_BTN_CANCEL = QDialogButtonBox.StandardButton.Cancel
-    _QT_BTN_ROLE_RESET = QDialogButtonBox.ButtonRole.ResetRole
-    _QT_ITEM_EDITABLE = Qt.ItemFlag.ItemIsEditable
-except AttributeError:
-    _QT_BTN_OK = QDialogButtonBox.Ok
-    _QT_BTN_CANCEL = QDialogButtonBox.Cancel
-    _QT_BTN_ROLE_RESET = QDialogButtonBox.ResetRole
-    _QT_ITEM_EDITABLE = Qt.ItemIsEditable
-
-# Qt6 (PyQt6) перенёс StandardButton и ItemFlag в отдельные enum-пространства.
-# Qt5 (PyQt5) использует плоские имена. Паттерн try/except покрывает оба.
-
-
-def _exec_dialog(dlg):
-    """Запускает диалог совместимым способом (Qt5/Qt6)."""
-    if hasattr(dlg, "exec"):
-        return dlg.exec()
-    return dlg.exec_()
-
-
+# QVariant есть в PyQt5 (QGIS 3.x), но удалён в PyQt6 (QGIS 4.x).
+# В PyQt6 эквивалент — QMetaType.Type.*.
 try:
     from qgis.PyQt.QtCore import QVariant
 
@@ -158,44 +101,39 @@ from qgis.core import (
 )
 from qgis.gui import QgsMapCanvas, QgsProjectionSelectionWidget, QgsRubberBand
 
-try:
-    # QGIS 4 / PyQt6 (строгие перечисления)
-    _QgsWkbTypesType_Point = QgsWkbTypes.Type.Point
-    _QgsWkbTypesType_LineString = QgsWkbTypes.Type.LineString
-    _QgsWkbTypesType_Polygon = QgsWkbTypes.Type.Polygon
-    _QgsWkbTypesType_MultiPolygon = QgsWkbTypes.Type.MultiPolygon
+# ---------- Qt-константы (scoped enums, PyQt5 5.15+ / PyQt6) ----------
+_QPAINTER_ANTIALIASING = QPainter.RenderHint.Antialiasing
+_QT_HORIZONTAL = Qt.Orientation.Horizontal
+_QT_VERTICAL = Qt.Orientation.Vertical
+_QT_CUSTOM_CONTEXT_MENU = Qt.ContextMenuPolicy.CustomContextMenu
+_QT_ALIGN_LEFT_BOTTOM = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom
+_QT_ALIGN_LEFT_TOP = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop
+_QT_COLOR_ALPHA = QColorDialog.ColorDialogOption.ShowAlphaChannel
 
-    _QgsWkbTypesGeom_Point = QgsWkbTypes.GeometryType.PointGeometry
-    _QgsWkbTypesGeom_Line = QgsWkbTypes.GeometryType.LineGeometry
-    _QgsWkbTypesGeom_Polygon = QgsWkbTypes.GeometryType.PolygonGeometry
+_QT_BTN_OK = QDialogButtonBox.StandardButton.Ok
+_QT_BTN_CANCEL = QDialogButtonBox.StandardButton.Cancel
+_QT_BTN_ROLE_RESET = QDialogButtonBox.ButtonRole.ResetRole
+_QT_ITEM_EDITABLE = Qt.ItemFlag.ItemIsEditable
 
-    _QMessageBox_Yes = QMessageBox.StandardButton.Yes
-    _QMessageBox_No = QMessageBox.StandardButton.No
+# ---------- QGIS-константы (scoped enums, QGIS 3.28+ / 4.x) ----------
+_QgsWkbTypesType_Point = QgsWkbTypes.Type.Point
+_QgsWkbTypesType_LineString = QgsWkbTypes.Type.LineString
+_QgsWkbTypesType_Polygon = QgsWkbTypes.Type.Polygon
+_QgsWkbTypesType_MultiPolygon = QgsWkbTypes.Type.MultiPolygon
 
-    _QgsVectorFileWriter_Action = (
-        QgsVectorFileWriter.ActionOnExistingFile.CreateOrOverwriteLayer
-    )
-    _QgsVectorFileWriter_Error = QgsVectorFileWriter.WriterError.NoError
+_QgsWkbTypesGeom_Point = QgsWkbTypes.GeometryType.PointGeometry
+_QgsWkbTypesGeom_Line = QgsWkbTypes.GeometryType.LineGeometry
+_QgsWkbTypesGeom_Polygon = QgsWkbTypes.GeometryType.PolygonGeometry
 
-    _QColor_HexArgb = QColor.NameFormat.HexArgb
-except AttributeError:
-    # QGIS 3 / PyQt5 (старые перечисления)
-    _QgsWkbTypesType_Point = QgsWkbTypes.Point
-    _QgsWkbTypesType_LineString = QgsWkbTypes.LineString
-    _QgsWkbTypesType_Polygon = QgsWkbTypes.Polygon
-    _QgsWkbTypesType_MultiPolygon = QgsWkbTypes.MultiPolygon
+_QMessageBox_Yes = QMessageBox.StandardButton.Yes
+_QMessageBox_No = QMessageBox.StandardButton.No
 
-    _QgsWkbTypesGeom_Point = QgsWkbTypes.PointGeometry
-    _QgsWkbTypesGeom_Line = QgsWkbTypes.LineGeometry
-    _QgsWkbTypesGeom_Polygon = QgsWkbTypes.PolygonGeometry
+_QgsVectorFileWriter_Action = (
+    QgsVectorFileWriter.ActionOnExistingFile.CreateOrOverwriteLayer
+)
+_QgsVectorFileWriter_Error = QgsVectorFileWriter.WriterError.NoError
 
-    _QMessageBox_Yes = QMessageBox.Yes
-    _QMessageBox_No = QMessageBox.No
-
-    _QgsVectorFileWriter_Action = QgsVectorFileWriter.CreateOrOverwriteLayer
-    _QgsVectorFileWriter_Error = QgsVectorFileWriter.NoError
-
-    _QColor_HexArgb = QColor.HexArgb
+_QColor_HexArgb = QColor.NameFormat.HexArgb
 
 # ============================================================
 # КОНСТАНТЫ
@@ -247,10 +185,7 @@ HMS_EXAMPLE = "55°43'28.05\"  или  55\t43\t28.05"
 # В Qt5 (QGIS 3.x) — QComboBox.AdjustToContents.
 # В Qt6 (QGIS 4.x) — QComboBox.SizeAdjustPolicy.AdjustToContents.
 # Пробуем новый путь, при неудаче — старый.
-try:
-    COL_COMBO_POLICY = QComboBox.SizeAdjustPolicy.AdjustToContents
-except AttributeError:
-    COL_COMBO_POLICY = QComboBox.AdjustToContents
+COL_COMBO_POLICY = QComboBox.SizeAdjustPolicy.AdjustToContents
 COL_COMBO_MIN_CHARS = 12
 
 NUM_MIN = 2
@@ -504,7 +439,7 @@ def _geom_length_m(geom, units):
 def _log_ignored_exception(e, context=""):
     """Логирует ошибку, которую мы решили проигнорировать."""
     msg = f"Проигнорирована ошибка {context}: {type(e).__name__} - {e}"
-    QgsMessageLog.logMessage(msg, "KYB_import_coords", Qgis.Warning)
+    QgsMessageLog.logMessage(msg, "KYB_import_coords", Qgis.MessageLevel.Warning)
 
 
 class ColorButton(QPushButton):
@@ -559,7 +494,7 @@ class ColorButton(QPushButton):
         dlg.setOption(_QT_COLOR_ALPHA, True)
         dlg.setStyleSheet("")  # снимаем унаследованный стиль
 
-        if _exec_dialog(dlg):
+        if dlg.exec():
             self._color = dlg.currentColor()
             self._update_style()
 
@@ -1222,12 +1157,9 @@ class ImportDialog(QDialog):
         цвета к превью-карте и перестраивает таблицу — чтобы
         формат координат (десятичный / ГГММСС) и точность
         отобразились сразу.
-
-        exec() vs exec_(): в Qt5 (QGIS 3.x) метод назывался exec_(),
-        в Qt6 (QGIS 4.x) — exec(). Используем совместимую обёртку.
         """
         dlg = DisplaySettingsDialog(self)
-        result = dlg.exec() if hasattr(dlg, "exec") else _exec_dialog(dlg)
+        result = dlg.exec()
         if result:
             self._load_display_settings()
             self._init_map_canvas_colors()
@@ -1245,7 +1177,7 @@ class ImportDialog(QDialog):
         чтобы новый формат (десятичный / ГГММСС) сразу отобразился.
         """
         dlg = PrecisionSettingsDialog(self)
-        result = dlg.exec() if hasattr(dlg, "exec") else _exec_dialog(dlg)
+        result = dlg.exec()
         if result:
             self._load_display_settings()
             if self._is_spatial_input:
@@ -3017,7 +2949,7 @@ class ImportDialog(QDialog):
         Побеждает самый стабильный. Если ни один не дал ≥2 колонок,
         возвращается таб.
         """
-        lines = [l for l in text.splitlines() if l.strip()][:15]
+        lines = [line for line in text.splitlines() if line.strip()][:15]
         if not lines:
             return "\t"
 
@@ -4316,7 +4248,7 @@ class ImportDialog(QDialog):
         act_add.setEnabled(is_data_row)
         act_del.setEnabled(is_data_row)
 
-        chosen = menu.exec_(self.preview.viewport().mapToGlobal(pos))
+        chosen = menu.exec(self.preview.viewport().mapToGlobal(pos))
         if chosen is None:
             return
 

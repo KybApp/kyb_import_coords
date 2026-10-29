@@ -13,15 +13,11 @@
 
 import os
 
+from qgis.core import Qgis, QgsMessageLog
+
 # QAction: в Qt5 (QGIS 3.x) живёт в QtWidgets, в Qt6 (QGIS 4.x) — в QtGui.
 # Пробуем оба варианта, чтобы работало и там, и там.
-try:
-    from qgis.PyQt.QtGui import QAction
-except ImportError:
-    from qgis.PyQt.QtWidgets import QAction
-
-from qgis.core import Qgis, QgsMessageLog
-from qgis.PyQt.QtGui import QIcon
+from qgis.PyQt.QtGui import QAction, QIcon
 from qgis.PyQt.QtWidgets import QToolBar
 
 from .dialog import ImportDialog
@@ -46,7 +42,7 @@ def _log_ignored_exception(e, context=""):
     плагин при этом продолжал работу.
     """
     msg = f"Проигнорирована ошибка {context}: {type(e).__name__} - {e}"
-    QgsMessageLog.logMessage(msg, "KYB_import_coords", Qgis.Warning)
+    QgsMessageLog.logMessage(msg, "KYB_import_coords", Qgis.MessageLevel.Warning)
 
 
 class ImportCoordsPlugin:
@@ -134,12 +130,6 @@ class ImportCoordsPlugin:
         return None
 
     def run(self):
-        """Открывает диалог импорта.
-
-        Используем exec() для Qt6, exec_() для Qt5.
-        """
+        """Открывает диалог импорта."""
         dlg = ImportDialog(self.iface)
-        if hasattr(dlg, "exec"):
-            dlg.exec()
-        else:
-            dlg.exec_()
+        dlg.exec()
