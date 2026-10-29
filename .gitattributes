@@ -1,0 +1,15 @@
+# Служебные файлы Git и GitHub — не нужны в архиве плагина
+.github/ export-ignore
+.gitignore export-ignore
+.gitattributes export-ignore
+tests/ export-ignore
+
+# Python-мусор
+__pycache__/ export-ignore
+**/__pycache__/ export-ignore
+*.pyc export-ignore
+
+# Документация для разработчиков
+CHANGELOG.md export-ignore
+CONTRIBUTING.md export-ignore
+docs/ export-ignore

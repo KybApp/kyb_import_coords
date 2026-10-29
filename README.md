@@ -159,4 +159,5 @@
 
 ## Лицензия
 
-GNU General Public License v3.0. См. файл `LICENSE`.
+GNU General Public License v3.0. 
+Полный текст лицензии находится в файле `LICENSE` в корневой папке плагина.
