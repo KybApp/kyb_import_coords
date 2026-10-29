@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Служебные файлы VS Code
+.vscode/
+
+# Служебные файлы ОС
+.DS_Store
+Thumbs.db
+
+# Скомпилированные файлы QGIS
+ui_*.py
+resources_rc.py
