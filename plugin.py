@@ -15,9 +15,13 @@ import os
 
 from qgis.core import Qgis, QgsMessageLog
 
-# QAction: в Qt5 (QGIS 3.x) живёт в QtWidgets, в Qt6 (QGIS 4.x) — в QtGui.
-# Пробуем оба варианта, чтобы работало и там, и там.
-from qgis.PyQt.QtGui import QAction, QIcon
+# QAction: в PyQt5 (QGIS 3.x) живёт в QtWidgets, в PyQt6 (QGIS 4.x) — в QtGui.
+try:
+    from qgis.PyQt.QtGui import QAction
+except ImportError:
+    from qgis.PyQt.QtWidgets import QAction
+
+from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QToolBar
 
 from .dialog import ImportDialog
