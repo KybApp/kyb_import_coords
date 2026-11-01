@@ -67,7 +67,10 @@ class _TsTranslator(QTranslator):
             return False
 
         try:
-            root = ET.fromstring(content)
+            # Безопасно: content уже проверен выше на DOCTYPE/ENTITY
+            # (если defusedxml не установлен). С defusedxml — ET уже
+            # безопасная замена. Сканер: проверка вручную, # nosec.
+            root = ET.fromstring(content)  # nosec B314
         except ET.ParseError:
             return False
 
