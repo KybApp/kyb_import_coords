@@ -1,16 +1,18 @@
-"""Загрузка переводов плагина KYB_import_coords.
+"""Безопасная загрузка переводов плагина KYB_import_coords.
 
-Приоритет:
-    1. plugin_XX.qm — если есть (быстрее, ~1ms);
-    2. plugin_XX.ts — если .qm нет, парсим XML сами (~30ms);
-    3. ничего — работает русский (язык оригинала).
+Мы НЕ используем QCoreApplication.installTranslator(), чтобы не сломать
+переводы самого QGIS. Вместо этого мы храним переводчик локально и
+применяем его только к строкам нашего плагина через функцию tr().
 """
 
 import os
 import xml.etree.ElementTree as ET
 
 from qgis.core import QgsSettings
-from qgis.PyQt.QtCore import QCoreApplication, QLocale, QTranslator
+from qgis.PyQt.QtCore import QLocale, QTranslator
+
+# Глобальная переменная модуля для хранения активного переводчика
+_active_translator = None
 
 
 def _app_locale():
@@ -23,20 +25,16 @@ def _app_locale():
 
 
 class _TsTranslator(QTranslator):
-    """Транслятор, читающий .ts (XML) напрямую — без lrelease.
-
-    Qt при вызове QCoreApplication.translate(context, source) обходит
-    все установленные трансляторы и берёт первый, вернувший непустую
-    строку. Наш translate() возвращает "" для отсутствующих пар —
-    тогда Qt переходит к следующему или к source.
-    """
+    """Транслятор, читающий .ts (XML) напрямую — без lrelease."""
 
     def __init__(self):
         super().__init__()
         self._data = {}
 
     def translate(self, context, source, disambiguation=None, n=-1):
-        return self._data.get((context, source), "")
+        # Возвращаем None, если перевода нет. Qt поймет, что нужно
+        # использовать исходную строку (source).
+        return self._data.get((context, source), None)
 
     def isEmpty(self):
         return not self._data
@@ -67,39 +65,39 @@ class _TsTranslator(QTranslator):
 
 
 def install_translator(plugin_dir):
-    """Устанавливает переводчик для текущей локали QGIS.
-
-    Параметры:
-        plugin_dir — путь к папке плагина (где лежит i18n/).
-
-    Возвращает QTranslator или None, если перевода нет.
-    """
+    """Загружает переводчик, но НЕ устанавливает его глобально."""
+    global _active_translator
     locale = _app_locale()
     lang = locale.split("_")[0] if "_" in locale else locale
     if not lang or lang == "ru":
-        return None
+        return
 
-    # 1. Пробуем .qm (быстро, нативно)
+    # 1. Пробуем .qm
     qm_path = os.path.join(plugin_dir, "i18n", f"plugin_{lang}.qm")
     if os.path.isfile(qm_path):
         translator = QTranslator()
         if translator.load(qm_path):
-            QCoreApplication.installTranslator(translator)
-            return translator
+            _active_translator = translator
+            return
 
-    # 2. Откатываемся к .ts (парсим XML сами)
+    # 2. Откатываемся к .ts
     ts_path = os.path.join(plugin_dir, "i18n", f"plugin_{lang}.ts")
     if os.path.isfile(ts_path):
         translator = _TsTranslator()
         if translator.load_ts(ts_path):
-            QCoreApplication.installTranslator(translator)
-            return translator
-
-    return None
+            _active_translator = translator
 
 
-def remove_translator(translator):
-    """Снимает переводчик, если он был установлен."""
-    if translator is None:
-        return
-    QCoreApplication.removeTranslator(translator)
+def unload_translator():
+    """Сбрасывает переводчик при выключении плагина."""
+    global _active_translator
+    _active_translator = None
+
+
+def tr(context, text):
+    """Безопасный перевод строк только для нашего плагина."""
+    if _active_translator:
+        translated = _active_translator.translate(context, text)
+        if translated:
+            return translated
+    return text

@@ -6,8 +6,8 @@
 
 Логика v2:
     Парсит dialog.py и plugin.py через AST. Находит:
-      • QCoreApplication.translate("Ctx", "строка")
-      • QCoreApplication.translate(ctx, "строка") где ctx="Ctx" в том же методе
+      • tr("Ctx", "строка")
+      • tr(ctx, "строка") где ctx="Ctx" в том же методе
       • _tr("строка") в plugin.py (обёртка с контекстом "plugin")
     Многострочные (конкатенация строк) — восстанавливаются корректно.
 """

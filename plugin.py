@@ -5,7 +5,6 @@
 import os
 
 from qgis.core import Qgis, QgsMessageLog
-from qgis.PyQt.QtCore import QCoreApplication
 
 try:
     from qgis.PyQt.QtGui import QAction
@@ -16,7 +15,7 @@ from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QToolBar
 
 from .dialog import ImportDialog
-from .i18n import install_translator, remove_translator
+from .i18n import install_translator, tr, unload_translator
 
 TOOLBAR_NAME = "KYB_TOOLS"
 
@@ -27,7 +26,7 @@ def _log_ignored_exception(e, context=""):
 
 
 def _tr(text):
-    return QCoreApplication.translate("plugin", text)
+    return tr("plugin", text)
 
 
 class ImportCoordsPlugin:
@@ -35,12 +34,11 @@ class ImportCoordsPlugin:
         self.iface = iface
         self.action = None
         self.toolbar = None
-        self._translator = None
         self._menu_name = None
 
     def initGui(self):
         # --- Переводы ---
-        self._translator = install_translator(os.path.dirname(__file__))
+        install_translator(os.path.dirname(__file__))
 
         icon_path = os.path.join(os.path.dirname(__file__), "icon.png")
 
@@ -77,8 +75,7 @@ class ImportCoordsPlugin:
             except Exception as e:  # noqa: BLE001
                 _log_ignored_exception(e, "при скрытии пустой панели KYB_TOOLS")
 
-        remove_translator(self._translator)
-        self._translator = None
+        unload_translator()
 
     def _find_toolbar(self, name):
         try:

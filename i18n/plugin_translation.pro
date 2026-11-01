@@ -1,6 +1,6 @@
 # i18n/plugin_translation.pro
 
-# Файлы с QCoreApplication.translate(...)
+# Файлы с tr(...)
 SOURCES = ../dialog.py \
           ../plugin.py
 
