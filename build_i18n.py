@@ -4,12 +4,13 @@
     python build_i18n.py --extract   # только извлечь строки
     python build_i18n.py             # извлечь + сгенерировать .ts + lrelease
 
-Логика v2:
-    Парсит dialog.py и plugin.py через AST. Находит:
-      • tr("Ctx", "строка")
-      • tr(ctx, "строка") где ctx="Ctx" в том же методе
-      • _tr("строка") в plugin.py (обёртка с контекстом "plugin")
-    Многострочные (конкатенация строк) — восстанавливаются корректно.
+Логика v3:
+        Парсит dialog.py и plugin.py через AST. Находит:
+          • tr("Ctx", "строка")
+          • tr(ctx, "строка") где ctx="Ctx" в том же методе
+          • QCoreApplication.translate(...) — на случай остатков
+          • _tr("строка") в plugin.py (обёртка с контекстом "plugin")
+        Многострочные (конкатенация строк) — восстанавливаются корректно.
 """
 
 import argparse
@@ -73,7 +74,10 @@ def extract_from_ast(filepath):
                 )
             ):
                 is_qcapp_translate = True
-            if is_qcapp_translate and len(node.args) >= 2:
+            is_tr_call = (
+                isinstance(func, ast.Name) and func.id == "tr" and len(node.args) >= 2
+            )
+            if (is_qcapp_translate or is_tr_call) and len(node.args) >= 2:
                 ctx_node, src_node = node.args[0], node.args[1]
                 if isinstance(src_node, ast.Constant) and isinstance(
                     src_node.value, str
@@ -183,7 +187,6 @@ def write_ts(lang, translations):
     path = os.path.join(I18N_DIR, f"plugin_{lang}.ts")
     with open(path, "w", encoding="utf-8") as f:
         f.write('<?xml version="1.0" encoding="utf-8"?>\n')
-        f.write("<!DOCTYPE TS>\n")
         f.write(f'<TS version="2.1" language="{lang}">\n')
         for ctx in sorted(by_ctx.keys()):
             f.write("  <context>\n")

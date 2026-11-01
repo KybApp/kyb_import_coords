@@ -1,17 +1,34 @@
 """Загрузка переводов плагина KYB_import_coords.
 
-Приоритет:
-    1. plugin_XX.qm — если есть (быстрее, ~1ms);
-    2. plugin_XX.ts — если .qm нет, парсим XML сами (~30ms);
+Подход: НЕ устанавливаем QTranslator глобально через
+QCoreApplication.installTranslator (это ломает UI QGIS 4 / Qt6 —
+пропадают все стандартные надписи). Вместо этого храним переводчик
+в модульной переменной _active_translator и переводим строки через
+собственную функцию tr(context, text).
+
+Приоритет загрузки:
+    1. plugin_XX.qm — если есть (быстрее);
+    2. plugin_XX.ts — если .qm нет, парсим XML сами;
     3. ничего — работает русский (язык оригинала).
 """
 
 import os
 import re
-import xml.etree.ElementTree as ET
 
 from qgis.core import QgsSettings
-from qgis.PyQt.QtCore import QCoreApplication, QLocale, QTranslator
+from qgis.PyQt.QtCore import QLocale, QTranslator
+
+try:
+    from defusedxml import ElementTree as ET
+
+    _DEFUSED = True
+except ImportError:
+    import xml.etree.ElementTree as ET  # nosec B405
+
+    _DEFUSED = False
+
+
+_active_translator = None
 
 
 def _app_locale():
@@ -24,13 +41,7 @@ def _app_locale():
 
 
 class _TsTranslator(QTranslator):
-    """Транслятор, читающий .ts (XML) напрямую — без lrelease.
-
-    Qt при вызове QCoreApplication.translate(context, source) обходит
-    все установленные трансляторы и берёт первый, вернувший непустую
-    строку. Наш translate() возвращает "" для отсутствующих пар —
-    тогда Qt переходит к следующему или к source.
-    """
+    """Транслятор, читающий .ts (XML) напрямую — без lrelease."""
 
     def __init__(self):
         super().__init__()
@@ -49,10 +60,10 @@ class _TsTranslator(QTranslator):
         except OSError:
             return False
 
-        # Защита от XML-бомб и внешних сущностей: DOCTYPE/ENTITY
-        # нам не нужны (QGIS .ts их не использует). Отклоняем файл,
-        # если встречаются — это исключает billion laughs и XXE.
-        if re.search(r"<!DOCTYPE|<!ENTITY", content, re.IGNORECASE):
+        # Защита от XML-бомб и внешних сущностей. defusedxml
+        # проверяет сам. Fallback: отклоняем файлы с DOCTYPE/ENTITY
+        # вручную (QGIS .ts их не использует).
+        if not _DEFUSED and re.search(r"<!DOCTYPE|<!ENTITY", content, re.IGNORECASE):
             return False
 
         try:
@@ -80,13 +91,17 @@ class _TsTranslator(QTranslator):
 
 
 def install_translator(plugin_dir):
-    """Устанавливает переводчик для текущей локали QGIS.
+    """Загружает перевод для текущей локали QGIS.
 
-    Параметры:
-        plugin_dir — путь к папке плагина (где лежит i18n/).
+    НЕ устанавливает глобально через QCoreApplication.installTranslator.
+    Сохраняет переводчик в модульной переменной _active_translator.
+    Перевод работает только через tr().
 
-    Возвращает QTranslator или None, если перевода нет.
+    Возвращает загруженный QTranslator или None.
     """
+    global _active_translator
+    _active_translator = None
+
     locale = _app_locale()
     lang = locale.split("_")[0] if "_" in locale else locale
     if not lang or lang == "ru":
@@ -97,7 +112,7 @@ def install_translator(plugin_dir):
     if os.path.isfile(qm_path):
         translator = QTranslator()
         if translator.load(qm_path):
-            QCoreApplication.installTranslator(translator)
+            _active_translator = translator
             return translator
 
     # 2. Откатываемся к .ts (парсим XML сами)
@@ -105,14 +120,29 @@ def install_translator(plugin_dir):
     if os.path.isfile(ts_path):
         translator = _TsTranslator()
         if translator.load_ts(ts_path):
-            QCoreApplication.installTranslator(translator)
+            _active_translator = translator
             return translator
 
     return None
 
 
-def remove_translator(translator):
-    """Снимает переводчик, если он был установлен."""
-    if translator is None:
-        return
-    QCoreApplication.removeTranslator(translator)
+def unload_translator():
+    """Сбрасывает активный переводчик."""
+    global _active_translator
+    _active_translator = None
+
+
+def tr(context, text):
+    """Переводит строку через активный переводчик.
+
+    Порядок аргументов — как у QCoreApplication.translate:
+    сначала контекст, потом текст.
+
+    Если переводчика нет или строки нет в словаре — возвращает
+    оригинал (text).
+    """
+    if _active_translator is not None:
+        translated = _active_translator.translate(context, text)
+        if translated:
+            return translated
+    return text
