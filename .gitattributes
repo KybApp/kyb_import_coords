@@ -14,3 +14,14 @@ __pycache__/ export-ignore
 CHANGELOG.md export-ignore
 CONTRIBUTING.md export-ignore
 docs/ export-ignore
+
+# Локализация — служебные файлы сборки
+build_i18n.py export-ignore
+translations_data.py export-ignore
+translations_data_p1.py export-ignore
+translations_data_p2.py export-ignore
+translations_data_p3.py export-ignore
+translations_data_p4.py export-ignore
+i18n/strings_to_translate.txt export-ignore
+i18n/missing_strings.txt export-ignore
+i18n/plugin_translation.pro export-ignore

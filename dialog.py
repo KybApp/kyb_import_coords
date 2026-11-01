@@ -33,7 +33,7 @@ import os
 import re
 from collections import Counter
 
-from qgis.PyQt.QtCore import QRectF, Qt
+from qgis.PyQt.QtCore import QCoreApplication, QRectF, Qt
 from qgis.PyQt.QtGui import QBrush, QColor, QFont, QPainter, QPen
 
 # ---------- Qt: виджеты и утилиты ----------
@@ -152,6 +152,7 @@ GEOMS = ["Точка", "Линия", "Полигон", "Многоконтурн
 ORDERS = ["Широта, Долгота", "Долгота, Широта"]
 AXES = ["Север, Восток", "Восток, Север"]
 POLY_STYLES = ["Контур", "Заливка", "Контур + заливка"]
+VNUM_MODES = ["Авто (по объектам)", "Авто (сквозная)", "Из колонки"]
 
 GEOM_URI = {
     "Точка": "Point",
@@ -173,12 +174,6 @@ HMS_RE = re.compile(
 FMT_DECIMAL = "decimal"
 FMT_HMS_ONE = "hms_one"
 FMT_HMS_THREE = "hms_three"
-
-FMT_LABELS = {
-    FMT_DECIMAL: "Десятичные",
-    FMT_HMS_ONE: "ГМС в одной колонке",
-    FMT_HMS_THREE: "ГМС в трёх колонках",
-}
 
 HMS_EXAMPLE = "55°43'28.05\"  или  55\t43\t28.05"
 
@@ -278,6 +273,64 @@ def parse_hms_one(text):
     return _hms_to_dec(d, mi, s)
 
 
+def _delim_display(name):
+    return QCoreApplication.translate("KYB", name)
+
+
+def _delim_key(display_text):
+    for key in DELIMS:
+        if _delim_display(key) == display_text:
+            return key
+    return "авто"
+
+
+def _geom_display(name):
+    return QCoreApplication.translate("KYB", name)
+
+
+def _geom_key(display_text):
+    for key in GEOMS:
+        if _geom_display(key) == display_text:
+            return key
+    return GEOMS[0]
+
+
+def _poly_style_key(display_text):
+    for key in POLY_STYLES:
+        if QCoreApplication.translate("KYB", key) == display_text:
+            return key
+    return POLY_STYLES[0]
+
+
+def _order_key(display_text):
+    for key in ORDERS:
+        if QCoreApplication.translate("KYB", key) == display_text:
+            return key
+    return ORDERS[0]
+
+
+def _axes_key(display_text):
+    for key in AXES:
+        if QCoreApplication.translate("KYB", key) == display_text:
+            return key
+    return AXES[0]
+
+
+def _vnum_mode_key(display_text):
+    for key in VNUM_MODES:
+        if QCoreApplication.translate("KYB", key) == display_text:
+            return key
+    return VNUM_MODES[0]
+
+
+def _fmt_labels():
+    return {
+        FMT_DECIMAL: QCoreApplication.translate("KYB", "Десятичные"),
+        FMT_HMS_ONE: QCoreApplication.translate("KYB", "ГМС в одной колонке"),
+        FMT_HMS_THREE: QCoreApplication.translate("KYB", "ГМС в трёх колонках"),
+    }
+
+
 def _apply_polygon_style(
     layer, style_name, outline_color=None, outline_width=None, fill_color=None
 ):
@@ -297,14 +350,17 @@ def _apply_polygon_style(
     ow = outline_width if outline_width is not None else 0.5
     fc = fill_color or QColor(150, 150, 150, 128)
 
-    if style_name == "Контур":
+    label_outline = QCoreApplication.translate("KYB", "Контур")
+    label_fill = QCoreApplication.translate("KYB", "Заливка")
+
+    if style_name == label_outline:
         props = {
             "style": "no",
             "outline_style": "solid",
             "outline_color": oc.name(_QColor_HexArgb),
             "outline_width": str(ow),
         }
-    elif style_name == "Заливка":
+    elif style_name == label_fill:
         props = {
             "style": "solid",
             "color": fc.name(_QColor_HexArgb),
@@ -442,6 +498,50 @@ def _log_ignored_exception(e, context=""):
     QgsMessageLog.logMessage(msg, "KYB_import_coords", Qgis.MessageLevel.Warning)
 
 
+def _msg_warning(parent, title, text):
+    msg = QMessageBox(parent)
+    msg.setIcon(QMessageBox.Icon.Warning)
+    msg.setWindowTitle(title)
+    msg.setText(text)
+    msg.setStandardButtons(QMessageBox.StandardButton.Ok)
+    msg.button(QMessageBox.StandardButton.Ok).setText(
+        QCoreApplication.translate("KYB", "OK")
+    )
+    msg.exec()
+
+
+def _msg_critical(parent, title, text):
+    msg = QMessageBox(parent)
+    msg.setIcon(QMessageBox.Icon.Critical)
+    msg.setWindowTitle(title)
+    msg.setText(text)
+    msg.setStandardButtons(QMessageBox.StandardButton.Ok)
+    msg.button(QMessageBox.StandardButton.Ok).setText(
+        QCoreApplication.translate("KYB", "OK")
+    )
+    msg.exec()
+
+
+def _msg_question(parent, title, text, buttons, default_button):
+    msg = QMessageBox(parent)
+    msg.setIcon(QMessageBox.Icon.Question)
+    msg.setWindowTitle(title)
+    msg.setText(text)
+    msg.setStandardButtons(buttons)
+    msg.setDefaultButton(default_button)
+
+    if buttons & QMessageBox.StandardButton.Yes:
+        b = msg.button(QMessageBox.StandardButton.Yes)
+        if b:
+            b.setText(QCoreApplication.translate("KYB", "Да"))
+    if buttons & QMessageBox.StandardButton.No:
+        b = msg.button(QMessageBox.StandardButton.No)
+        if b:
+            b.setText(QCoreApplication.translate("KYB", "Нет"))
+
+    return msg.exec()
+
+
 class ColorButton(QPushButton):
     """Кнопка для выбора цвета.
 
@@ -490,7 +590,7 @@ class ColorButton(QPushButton):
         """
         parent = self.window()
         dlg = QColorDialog(self._color, parent)
-        dlg.setWindowTitle("Выбор цвета")
+        dlg.setWindowTitle(QCoreApplication.translate("ColorButton", "Выбор цвета"))
         dlg.setOption(_QT_COLOR_ALPHA, True)
         dlg.setStyleSheet("")  # снимаем унаследованный стиль
 
@@ -520,58 +620,63 @@ class DisplaySettingsDialog(QDialog):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Настройки отображения")
+        self.setWindowTitle(
+            QCoreApplication.translate("DisplaySettingsDialog", "Настройки отображения")
+        )
         self.setMinimumWidth(440)
         self._build_ui()
         self._load_from_settings()
 
     def _build_ui(self):
         root = QVBoxLayout(self)
+        ctx = "DisplaySettingsDialog"
 
         # --- Точки ---
-        gb_pt = QGroupBox("Точки")
+        gb_pt = QGroupBox(QCoreApplication.translate(ctx, "Точки"))
         g_pt = QGridLayout(gb_pt)
         self.pt_color = ColorButton(QColor(230, 0, 0, 220))
         self.pt_size = QSpinBox()
         self.pt_size.setRange(1, 50)
         self.pt_size.setSuffix(" px")
-        g_pt.addWidget(QLabel("Цвет:"), 0, 0)
+        g_pt.addWidget(QLabel(QCoreApplication.translate(ctx, "Цвет:")), 0, 0)
         g_pt.addWidget(self.pt_color, 0, 1)
-        g_pt.addWidget(QLabel("Размер:"), 1, 0)
+        g_pt.addWidget(QLabel(QCoreApplication.translate(ctx, "Размер:")), 1, 0)
         g_pt.addWidget(self.pt_size, 1, 1)
         root.addWidget(gb_pt)
 
         # --- Линии ---
-        gb_ln = QGroupBox("Линии")
+        gb_ln = QGroupBox(QCoreApplication.translate(ctx, "Линии"))
         g_ln = QGridLayout(gb_ln)
         self.ln_color = ColorButton(QColor(20, 160, 60, 255))
         self.ln_width = QSpinBox()
         self.ln_width.setRange(1, 20)
         self.ln_width.setSuffix(" px")
-        g_ln.addWidget(QLabel("Цвет:"), 0, 0)
+        g_ln.addWidget(QLabel(QCoreApplication.translate(ctx, "Цвет:")), 0, 0)
         g_ln.addWidget(self.ln_color, 0, 1)
-        g_ln.addWidget(QLabel("Толщина:"), 1, 0)
+        g_ln.addWidget(QLabel(QCoreApplication.translate(ctx, "Толщина:")), 1, 0)
         g_ln.addWidget(self.ln_width, 1, 1)
         root.addWidget(gb_ln)
 
         # --- Полигоны ---
-        gb_pg = QGroupBox("Полигоны")
+        gb_pg = QGroupBox(QCoreApplication.translate(ctx, "Полигоны"))
         g_pg = QGridLayout(gb_pg)
         self.pg_out_color = ColorButton(QColor(230, 0, 0, 220))
         self.pg_out_width = QSpinBox()
         self.pg_out_width.setRange(0, 20)
         self.pg_out_width.setSuffix(" px")
         self.pg_fill_color = ColorButton(QColor(230, 0, 0, 50))
-        g_pg.addWidget(QLabel("Цвет контура:"), 0, 0)
+        g_pg.addWidget(QLabel(QCoreApplication.translate(ctx, "Цвет контура:")), 0, 0)
         g_pg.addWidget(self.pg_out_color, 0, 1)
-        g_pg.addWidget(QLabel("Толщина контура:"), 1, 0)
+        g_pg.addWidget(
+            QLabel(QCoreApplication.translate(ctx, "Толщина контура:")), 1, 0
+        )
         g_pg.addWidget(self.pg_out_width, 1, 1)
-        g_pg.addWidget(QLabel("Цвет заливки:"), 2, 0)
+        g_pg.addWidget(QLabel(QCoreApplication.translate(ctx, "Цвет заливки:")), 2, 0)
         g_pg.addWidget(self.pg_fill_color, 2, 1)
         root.addWidget(gb_pg)
 
         # --- Подписи ---
-        gb_lb = QGroupBox("Подписи")
+        gb_lb = QGroupBox(QCoreApplication.translate(ctx, "Подписи"))
         g_lb = QGridLayout(gb_lb)
         self.lb_num_color = ColorButton(QColor(180, 0, 0, 255))
         self.lb_num_size = QSpinBox()
@@ -581,13 +686,15 @@ class DisplaySettingsDialog(QDialog):
         self.lb_area_size = QSpinBox()
         self.lb_area_size.setRange(4, 30)
         self.lb_area_size.setSuffix(" pt")
-        g_lb.addWidget(QLabel("Цвет номеров:"), 0, 0)
+        g_lb.addWidget(QLabel(QCoreApplication.translate(ctx, "Цвет номеров:")), 0, 0)
         g_lb.addWidget(self.lb_num_color, 0, 1)
-        g_lb.addWidget(QLabel("Размер номеров:"), 1, 0)
+        g_lb.addWidget(QLabel(QCoreApplication.translate(ctx, "Размер номеров:")), 1, 0)
         g_lb.addWidget(self.lb_num_size, 1, 1)
-        g_lb.addWidget(QLabel("Цвет площадей:"), 2, 0)
+        g_lb.addWidget(QLabel(QCoreApplication.translate(ctx, "Цвет площадей:")), 2, 0)
         g_lb.addWidget(self.lb_area_color, 2, 1)
-        g_lb.addWidget(QLabel("Размер площадей:"), 3, 0)
+        g_lb.addWidget(
+            QLabel(QCoreApplication.translate(ctx, "Размер площадей:")), 3, 0
+        )
         g_lb.addWidget(self.lb_area_size, 3, 1)
         root.addWidget(gb_lb)
 
@@ -595,8 +702,13 @@ class DisplaySettingsDialog(QDialog):
         bb = QDialogButtonBox(_QT_BTN_OK | _QT_BTN_CANCEL)
         bb.accepted.connect(self.accept)
         bb.rejected.connect(self.reject)
-        btn_reset = bb.addButton("Сбросить", _QT_BTN_ROLE_RESET)
+        btn_reset = bb.addButton(
+            QCoreApplication.translate(ctx, "Сбросить"), _QT_BTN_ROLE_RESET
+        )
         btn_reset.clicked.connect(self._reset_defaults)
+        # Явно задаём текст, чтобы не зависеть от системных qtbase_*.qm
+        bb.button(_QT_BTN_OK).setText(QCoreApplication.translate("KYB", "OK"))
+        bb.button(_QT_BTN_CANCEL).setText(QCoreApplication.translate("KYB", "Отмена"))
         root.addWidget(bb)
 
     def _load_from_settings(self):
@@ -709,40 +821,67 @@ class PrecisionSettingsDialog(QDialog):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Формат и точность координат")
+        self.setWindowTitle(
+            QCoreApplication.translate(
+                "PrecisionSettingsDialog", "Формат и точность координат"
+            )
+        )
         self.setMinimumWidth(400)
         self._build_ui()
         self._load_from_settings()
 
     def _build_ui(self):
         root = QVBoxLayout(self)
+        ctx = "PrecisionSettingsDialog"
 
-        gb_fmt = QGroupBox("Формат координат")
+        gb_fmt = QGroupBox(QCoreApplication.translate(ctx, "Формат координат"))
         g_fmt = QGridLayout(gb_fmt)
 
-        g_fmt.addWidget(QLabel("Широта/Долгота:"), 0, 0)
+        g_fmt.addWidget(
+            QLabel(QCoreApplication.translate(ctx, "Широта/Долгота:")), 0, 0
+        )
         self.coord_format = QComboBox()
-        self.coord_format.addItems(["Десятичные", "ГГММСС"])
+        self.coord_format.addItems(
+            [
+                QCoreApplication.translate(ctx, "Десятичные"),
+                QCoreApplication.translate(ctx, "ГГММСС"),
+            ]
+        )
         self.coord_format.currentIndexChanged.connect(self._update_precision_enabled)
         g_fmt.addWidget(self.coord_format, 0, 1)
 
-        g_fmt.addWidget(QLabel("Знаков после запятой (градусы):"), 1, 0)
+        g_fmt.addWidget(
+            QLabel(QCoreApplication.translate(ctx, "Знаков после запятой (градусы):")),
+            1,
+            0,
+        )
         self.deg_precision = QSpinBox()
         self.deg_precision.setRange(1, 15)
         g_fmt.addWidget(self.deg_precision, 1, 1)
 
-        g_fmt.addWidget(QLabel("Знаков после запятой (секунды):"), 2, 0)
+        g_fmt.addWidget(
+            QLabel(QCoreApplication.translate(ctx, "Знаков после запятой (секунды):")),
+            2,
+            0,
+        )
         self.dms_seconds_precision = QSpinBox()
         self.dms_seconds_precision.setRange(1, 6)
         g_fmt.addWidget(self.dms_seconds_precision, 2, 1)
 
-        g_fmt.addWidget(QLabel("Знаков после запятой (метры):"), 3, 0)
+        g_fmt.addWidget(
+            QLabel(QCoreApplication.translate(ctx, "Знаков после запятой (метры):")),
+            3,
+            0,
+        )
         self.meters_precision = QSpinBox()
         self.meters_precision.setRange(0, 6)
         g_fmt.addWidget(self.meters_precision, 3, 1)
 
         self.fmt_hint = QLabel(
-            "Для прямоугольных координат (метры) формат ГГММСС не применяется."
+            QCoreApplication.translate(
+                ctx,
+                "Для прямоугольных координат (метры) формат ГГММСС не применяется.",
+            )
         )
         self.fmt_hint.setObjectName("hint_label")
         self.fmt_hint.setWordWrap(True)
@@ -753,12 +892,18 @@ class PrecisionSettingsDialog(QDialog):
         bb = QDialogButtonBox(_QT_BTN_OK | _QT_BTN_CANCEL)
         bb.accepted.connect(self.accept)
         bb.rejected.connect(self.reject)
-        btn_reset = bb.addButton("Сбросить", _QT_BTN_ROLE_RESET)
+        btn_reset = bb.addButton(
+            QCoreApplication.translate(ctx, "Сбросить"), _QT_BTN_ROLE_RESET
+        )
         btn_reset.clicked.connect(self._reset_defaults)
+        # Явно задаём текст, чтобы не зависеть от системных qtbase_*.qm
+        bb.button(_QT_BTN_OK).setText(QCoreApplication.translate("KYB", "OK"))
+        bb.button(_QT_BTN_CANCEL).setText(QCoreApplication.translate("KYB", "Отмена"))
         root.addWidget(bb)
 
     def _update_precision_enabled(self):
-        is_dms = self.coord_format.currentText() == "ГГММСС"
+        dms_label = QCoreApplication.translate("PrecisionSettingsDialog", "ГГММСС")
+        is_dms = self.coord_format.currentText() == dms_label
         self.dms_seconds_precision.setEnabled(is_dms)
         self.deg_precision.setEnabled(not is_dms)
 
@@ -767,7 +912,11 @@ class PrecisionSettingsDialog(QDialog):
         pre = SETTINGS_PREFIX + "display/"
 
         fmt = s.value(pre + "coord_format", "decimal", type=str)
-        idx = self.coord_format.findText("ГГММСС" if fmt == "dms" else "Десятичные")
+        target = QCoreApplication.translate(
+            "PrecisionSettingsDialog",
+            "ГГММСС" if fmt == "dms" else "Десятичные",
+        )
+        idx = self.coord_format.findText(target)
         if idx >= 0:
             self.coord_format.setCurrentIndex(idx)
 
@@ -789,7 +938,8 @@ class PrecisionSettingsDialog(QDialog):
         s = QgsSettings()
         pre = SETTINGS_PREFIX + "display/"
         try:
-            fmt = "dms" if self.coord_format.currentText() == "ГГММСС" else "decimal"
+            dms_label = QCoreApplication.translate("PrecisionSettingsDialog", "ГГММСС")
+            fmt = "dms" if self.coord_format.currentText() == dms_label else "decimal"
             s.setValue(pre + "coord_format", fmt)
             s.setValue(pre + "deg_precision", self.deg_precision.value())
             s.setValue(
@@ -909,13 +1059,15 @@ class ScaleBarWidget(QWidget):
             # nice — в метрах, а _fmt_km ждёт километры.
             # Делим на 1000 до вызова.
             km = nice / 1000.0
+            unit_km = QCoreApplication.translate("ScaleBarWidget", "км")
             self._text = "0"
             self._mid = _fmt_km(km / 2.0)
-            self._end = _fmt_km(km) + " км"
+            self._end = _fmt_km(km) + " " + unit_km
         else:
+            unit_m = QCoreApplication.translate("ScaleBarWidget", "м")
             self._text = "0"
             self._mid = _fmt_m(nice / 2.0)
-            self._end = _fmt_m(nice) + " м"
+            self._end = _fmt_m(nice) + " " + unit_m
 
         self.update()
 
@@ -1047,7 +1199,7 @@ class ImportDialog(QDialog):
         """
         super().__init__(iface.mainWindow())
         self.iface = iface
-        self.setWindowTitle("Импорт данных")
+        self.setWindowTitle(QCoreApplication.translate("ImportDialog", "Импорт данных"))
         self.resize(1240, 820)
         self.setAcceptDrops(True)
 
@@ -1295,7 +1447,9 @@ class ImportDialog(QDialog):
         preview_block = QWidget()
         pb_layout = QVBoxLayout(preview_block)
         pb_layout.setContentsMargins(0, 0, 0, 0)
-        pb_layout.addWidget(QLabel("Просмотр данных:"))
+        pb_layout.addWidget(
+            QLabel(QCoreApplication.translate("ImportDialog", "Просмотр данных:"))
+        )
         self.preview = QTableWidget()
         self.preview.setContextMenuPolicy(_QT_CUSTOM_CONTEXT_MENU)
         self.preview.customContextMenuRequested.connect(self._on_preview_context_menu)
@@ -1308,7 +1462,9 @@ class ImportDialog(QDialog):
         map_block = QWidget()
         mb_layout = QVBoxLayout(map_block)
         mb_layout.setContentsMargins(0, 0, 0, 0)
-        mb_layout.addWidget(QLabel("Карта:"))
+        mb_layout.addWidget(
+            QLabel(QCoreApplication.translate("ImportDialog", "Карта:"))
+        )
 
         canvas_holder = QWidget()
         grid = QGridLayout(canvas_holder)
@@ -1354,16 +1510,20 @@ class ImportDialog(QDialog):
 
         # ---------- Нижние кнопки ----------
         row_btn = QHBoxLayout()
-        self.btn_clear = QPushButton("Очистить данные")
+        self.btn_clear = QPushButton(
+            QCoreApplication.translate("ImportDialog", "Очистить данные")
+        )
         self.btn_clear.clicked.connect(self.on_clear)
         row_btn.addWidget(self.btn_clear)
         row_btn.addStretch(1)
 
-        btn_ok = QPushButton("Импортировать")
+        btn_ok = QPushButton(
+            QCoreApplication.translate("ImportDialog", "Импортировать")
+        )
         btn_ok.clicked.connect(self.on_import)
         row_btn.addWidget(btn_ok)
 
-        btn_cancel = QPushButton("Отмена")
+        btn_cancel = QPushButton(QCoreApplication.translate("ImportDialog", "Отмена"))
         btn_cancel.clicked.connect(self.reject)
         row_btn.addWidget(btn_cancel)
         root.addLayout(row_btn)
@@ -1373,22 +1533,25 @@ class ImportDialog(QDialog):
     # --------------------------------------------------------
     def _block_source(self):
         """Файл, кнопка «Из буфера», выбор СК и плашка-предупреждение."""
-        box = QGroupBox("Источник данных")
+        ctx = "ImportDialog"
+        box = QGroupBox(QCoreApplication.translate(ctx, "Источник данных"))
         lay = QVBoxLayout(box)
 
         # Файл: поле тянется по ширине, кнопки фиксированы.
         row_file = QHBoxLayout()
-        row_file.addWidget(QLabel("Файл:"))
+        row_file.addWidget(QLabel(QCoreApplication.translate(ctx, "Файл:")))
         self.file_edit = QLineEdit()
         self.file_edit.setAcceptDrops(False)
-        self.file_edit.setPlaceholderText("Перетащите файл или нажмите «...»")
+        self.file_edit.setPlaceholderText(
+            QCoreApplication.translate(ctx, "Перетащите файл или нажмите «...»")
+        )
         self.file_edit.setMinimumWidth(80)
         row_file.addWidget(self.file_edit, 1)
         btn_browse = QPushButton("...")
         btn_browse.setFixedWidth(32)
         btn_browse.clicked.connect(self.on_browse)
         row_file.addWidget(btn_browse)
-        btn_clip = QPushButton("Из буфера")
+        btn_clip = QPushButton(QCoreApplication.translate(ctx, "Из буфера"))
         btn_clip.setMinimumWidth(90)
         btn_clip.clicked.connect(self.on_clipboard)
         row_file.addWidget(btn_clip)
@@ -1396,7 +1559,7 @@ class ImportDialog(QDialog):
 
         # Исходная СК во фрейме для подсветки, растягивается по ширине.
         row_crs = QHBoxLayout()
-        row_crs.addWidget(QLabel("Исходная СК:"))
+        row_crs.addWidget(QLabel(QCoreApplication.translate(ctx, "Исходная СК:")))
         self.crs_frame = QFrame()
         self.crs_frame.setObjectName("crs_frame")
         f_layout = QHBoxLayout(self.crs_frame)
@@ -1431,21 +1594,22 @@ class ImportDialog(QDialog):
                пользователь сначала видит параметры разбора, а потом
                уже привязку колонок.
         """
-        box = QGroupBox("Структура")
+        ctx = "ImportDialog"
+        box = QGroupBox(QCoreApplication.translate(ctx, "Структура"))
         lay = QVBoxLayout(box)
 
         # --- 1. Формат + Заголовки + Нач./Кон. строка — одной строкой ---
         row_fmt = QHBoxLayout()
-        self.format_label = QLabel("Формат: —")
+        self.format_label = QLabel(QCoreApplication.translate(ctx, "Формат: —"))
         row_fmt.addWidget(self.format_label)
 
         row_fmt.addSpacing(15)
-        self.headers_label = QLabel("Заголовки: —")
+        self.headers_label = QLabel(QCoreApplication.translate(ctx, "Заголовки: —"))
         self.headers_label.setObjectName("hint_label")
         row_fmt.addWidget(self.headers_label)
 
         row_fmt.addSpacing(10)
-        self.start_label = QLabel("Нач. строка:")
+        self.start_label = QLabel(QCoreApplication.translate(ctx, "Нач. строка:"))
         row_fmt.addWidget(self.start_label)
         self.start_line = QSpinBox()
         self.start_line.setMinimum(1)
@@ -1455,7 +1619,7 @@ class ImportDialog(QDialog):
         row_fmt.addWidget(self.start_line)
 
         row_fmt.addSpacing(10)
-        self.end_label = QLabel("Кон. строка:")
+        self.end_label = QLabel(QCoreApplication.translate(ctx, "Кон. строка:"))
         row_fmt.addWidget(self.end_label)
         self.end_line = QSpinBox()
         self.end_line.setMinimum(0)
@@ -1463,49 +1627,53 @@ class ImportDialog(QDialog):
         self.end_line.setMaximumWidth(70)
         self.end_line.valueChanged.connect(self._rebuild_from_raw)
         row_fmt.addWidget(self.end_line)
-        self.end_hint_label = QLabel("(0 = до конца)")
+        self.end_hint_label = QLabel(QCoreApplication.translate(ctx, "(0 = до конца)"))
         row_fmt.addWidget(self.end_hint_label)
         row_fmt.addStretch(1)
 
         # Кнопка-шестерёнка: настройки формата и точности координат.
         self.btn_precision = QPushButton("⚙")
         self.btn_precision.setFixedWidth(32)
-        self.btn_precision.setToolTip("Формат и точность координат")
+        self.btn_precision.setToolTip(
+            QCoreApplication.translate(ctx, "Формат и точность координат")
+        )
         self.btn_precision.clicked.connect(self._open_precision_dialog)
         row_fmt.addWidget(self.btn_precision)
         lay.addLayout(row_fmt)
 
         # --- 2. Кодировка + Разделитель + Порядок ---
         row_kd = QHBoxLayout()
-        self.enc_label = QLabel("Кодировка:")
+        self.enc_label = QLabel(QCoreApplication.translate(ctx, "Кодировка:"))
         row_kd.addWidget(self.enc_label)
         self.enc = QComboBox()
         self.enc.addItems(ENCODINGS)
         row_kd.addWidget(self.enc)
 
         row_kd.addSpacing(15)
-        self.delim_label = QLabel("Разделитель:")
+        self.delim_label = QLabel(QCoreApplication.translate(ctx, "Разделитель:"))
         row_kd.addWidget(self.delim_label)
         self.delim = QComboBox()
-        self.delim.addItems(list(DELIMS.keys()))
+        self.delim.addItems([_delim_display(k) for k in DELIMS])
         self.delim.currentIndexChanged.connect(self._reload_from_source)
         row_kd.addWidget(self.delim)
 
         row_kd.addSpacing(15)
-        self.order_label = QLabel("Порядок:")
+        self.order_label = QLabel(QCoreApplication.translate(ctx, "Порядок:"))
         row_kd.addWidget(self.order_label)
         self.order_combo = QComboBox()
-        self.order_combo.addItems(ORDERS)
+        self.order_combo.addItems(
+            [QCoreApplication.translate("KYB", o) for o in ORDERS]
+        )
         self.order_combo.currentIndexChanged.connect(self._on_axes_changed)
         row_kd.addWidget(self.order_combo)
 
         # Оси — тот же смысл, что Порядок, но для метров.
         # Стоит рядом, чтобы переключатель не «прыгал» при смене СК.
         row_kd.addSpacing(15)
-        self.axes_label = QLabel("Оси:")
+        self.axes_label = QLabel(QCoreApplication.translate(ctx, "Оси:"))
         row_kd.addWidget(self.axes_label)
         self.axes_combo = QComboBox()
-        self.axes_combo.addItems(AXES)
+        self.axes_combo.addItems([QCoreApplication.translate("KYB", a) for a in AXES])
         self.axes_combo.currentIndexChanged.connect(self._on_axes_changed)
         row_kd.addWidget(self.axes_combo)
 
@@ -1521,17 +1689,19 @@ class ImportDialog(QDialog):
 
         # --- 3. Нумерация вершин ---
         row_vnum = QHBoxLayout()
-        self.vnum_mode_label = QLabel("Нумерация вершин:")
+        self.vnum_mode_label = QLabel(
+            QCoreApplication.translate(ctx, "Нумерация вершин:")
+        )
         row_vnum.addWidget(self.vnum_mode_label)
 
         self.vnum_mode_combo = QComboBox()
         self.vnum_mode_combo.addItems(
-            ["Авто (по объектам)", "Авто (сквозная)", "Из колонки"]
+            [QCoreApplication.translate("KYB", v) for v in VNUM_MODES]
         )
         self.vnum_mode_combo.currentIndexChanged.connect(self._on_vnum_mode_changed)
         row_vnum.addWidget(self.vnum_mode_combo)
 
-        self.vnum_col_label = QLabel("Колонка:")
+        self.vnum_col_label = QLabel(QCoreApplication.translate(ctx, "Колонка:"))
         self.vnum_col_label.setVisible(False)
         row_vnum.addWidget(self.vnum_col_label)
 
@@ -1556,21 +1726,24 @@ class ImportDialog(QDialog):
     # --------------------------------------------------------
     def _block_geometry(self):
         """Тип геометрии, стиль полигона, чекбоксы вершин и нумерации."""
-        box = QGroupBox("Геометрия")
+        ctx = "ImportDialog"
+        box = QGroupBox(QCoreApplication.translate(ctx, "Геометрия"))
         lay = QVBoxLayout(box)
 
         row = QHBoxLayout()
-        row.addWidget(QLabel("Геометрия:"))
+        row.addWidget(QLabel(QCoreApplication.translate(ctx, "Геометрия:")))
         self.geom_combo = QComboBox()
-        self.geom_combo.addItems(GEOMS)
+        self.geom_combo.addItems([_geom_display(g) for g in GEOMS])
         self.geom_combo.currentIndexChanged.connect(self._on_geom_changed)
         row.addWidget(self.geom_combo)
 
         row.addSpacing(15)
-        self.poly_style_label = QLabel("Стиль:")
+        self.poly_style_label = QLabel(QCoreApplication.translate(ctx, "Стиль:"))
         row.addWidget(self.poly_style_label)
         self.poly_style = QComboBox()
-        self.poly_style.addItems(POLY_STYLES)
+        self.poly_style.addItems(
+            [QCoreApplication.translate("KYB", s) for s in POLY_STYLES]
+        )
         self.poly_style.currentIndexChanged.connect(self._on_preview_option_changed)
         row.addWidget(self.poly_style)
 
@@ -1581,19 +1754,23 @@ class ImportDialog(QDialog):
         # Кнопка-шестерёнка — открывает диалог настроек отображения.
         self.btn_display = QPushButton("⚙")
         self.btn_display.setFixedWidth(32)
-        self.btn_display.setToolTip("Настройки отображения")
+        self.btn_display.setToolTip(
+            QCoreApplication.translate(ctx, "Настройки отображения")
+        )
         self.btn_display.clicked.connect(self._open_display_dialog)
         row.addWidget(self.btn_display)
 
         lay.addLayout(row)
 
         row2 = QHBoxLayout()
-        self.cb_vertices = QCheckBox("Точки по углам")
+        self.cb_vertices = QCheckBox(QCoreApplication.translate(ctx, "Точки по углам"))
         self.cb_vertices.stateChanged.connect(self._on_preview_option_changed)
         row2.addWidget(self.cb_vertices)
 
         row2.addSpacing(15)
-        self.cb_numbering = QCheckBox("Нумерация точек и углов")
+        self.cb_numbering = QCheckBox(
+            QCoreApplication.translate(ctx, "Нумерация точек и углов")
+        )
         self.cb_numbering.stateChanged.connect(self._on_preview_option_changed)
         row2.addWidget(self.cb_numbering)
         row2.addStretch(1)
@@ -1606,33 +1783,44 @@ class ImportDialog(QDialog):
     # --------------------------------------------------------
     def _block_result(self):
         """Имя слоя и опция сохранения в GeoPackage + плашка про имя."""
-        box = QGroupBox("Результат")
+        ctx = "ImportDialog"
+        box = QGroupBox(QCoreApplication.translate(ctx, "Результат"))
         lay = QVBoxLayout(box)
 
         row_name = QHBoxLayout()
-        row_name.addWidget(QLabel("Имя слоя:"))
+        row_name.addWidget(QLabel(QCoreApplication.translate(ctx, "Имя слоя:")))
         self.layer_name_edit = QLineEdit()
-        self.layer_name_edit.setPlaceholderText("Например: точки_съёмки")
+        self.layer_name_edit.setPlaceholderText(
+            QCoreApplication.translate(ctx, "Например: точки_съёмки")
+        )
         self.layer_name_edit.textChanged.connect(self._on_layer_name_changed)
         row_name.addWidget(self.layer_name_edit, 1)
         lay.addLayout(row_name)
 
         # Inline-плашка про имя. Скрыта по умолчанию.
-        self.name_warning = QLabel("Введите имя слоя — без него импорт невозможен.")
+        self.name_warning = QLabel(
+            QCoreApplication.translate(
+                ctx, "Введите имя слоя — без него импорт невозможен."
+            )
+        )
         self.name_warning.setObjectName("warning_label")
         self.name_warning.setWordWrap(True)
         self.name_warning.setVisible(False)
         lay.addWidget(self.name_warning)
 
         row_save = QHBoxLayout()
-        self.cb_save_file = QCheckBox("Сохранить в файл (GeoPackage):")
+        self.cb_save_file = QCheckBox(
+            QCoreApplication.translate(ctx, "Сохранить в файл (GeoPackage):")
+        )
         row_save.addWidget(self.cb_save_file)
         row_save.addStretch(1)
         lay.addLayout(row_save)
 
         row_path = QHBoxLayout()
         self.save_path_edit = QLineEdit()
-        self.save_path_edit.setPlaceholderText("Путь к .gpkg")
+        self.save_path_edit.setPlaceholderText(
+            QCoreApplication.translate(ctx, "Путь к .gpkg")
+        )
         self.save_path_edit.setMinimumWidth(80)
         row_path.addWidget(self.save_path_edit, 1)
         btn_save_browse = QPushButton("...")
@@ -1674,7 +1862,7 @@ class ImportDialog(QDialog):
     def _on_vnum_mode_changed(self):
         """Показывает/прячет выбор колонки и обновляет таблицу."""
         mode = self.vnum_mode_combo.currentText()
-        is_col = mode == "Из колонки"
+        is_col = _vnum_mode_key(mode) == "Из колонки"
         self.vnum_col_label.setVisible(is_col)
         self.vnum_col_combo.setVisible(is_col)
         self.vnum_warning.setVisible(False)
@@ -1689,14 +1877,17 @@ class ImportDialog(QDialog):
         «Из колонки» выбран, но колонка не указана или содержит пустые
         значения. В этом случае показывает жёлтую плашку.
         """
-        if self.vnum_mode_combo.currentText() != "Из колонки":
+        if _vnum_mode_key(self.vnum_mode_combo.currentText()) != "Из колонки":
             self.vnum_warning.setVisible(False)
             return True
 
         col_idx = self._col_index(self.vnum_col_combo)
         if col_idx < 0:
             self.vnum_warning.setText(
-                "Выбран режим «Из колонки», но колонка не указана."
+                QCoreApplication.translate(
+                    "ImportDialog",
+                    "Выбран режим «Из колонки», но колонка не указана.",
+                )
             )
             self.vnum_warning.setVisible(True)
             return False
@@ -1713,8 +1904,11 @@ class ImportDialog(QDialog):
 
         if empty_found:
             self.vnum_warning.setText(
-                "В выбранной колонке есть пустые значения. "
-                "Выберите другую колонку или режим."
+                QCoreApplication.translate(
+                    "ImportDialog",
+                    "В выбранной колонке есть пустые значения. "
+                    "Выберите другую колонку или режим.",
+                )
             )
             self.vnum_warning.setVisible(True)
             return False
@@ -1724,10 +1918,10 @@ class ImportDialog(QDialog):
 
     def _get_vertex_number(self, row, local_vnum, global_vnum):
         """Возвращает строковый номер вершины по текущему режиму."""
-        mode = self.vnum_mode_combo.currentText()
-        if mode == "Авто (по объектам)":
+        key = _vnum_mode_key(self.vnum_mode_combo.currentText())
+        if key == "Авто (по объектам)":
             return str(local_vnum)
-        elif mode == "Авто (сквозная)":
+        elif key == "Авто (сквозная)":
             return str(global_vnum)
         else:
             col_idx = self._col_index(self.vnum_col_combo)
@@ -1808,8 +2002,11 @@ class ImportDialog(QDialog):
 
         if mismatch:
             self.crs_warning.setText(
-                "⚠ Внимание: данные и выбранная СК не согласованы по единицам.\n"
-                "Возможно, выбрана неверная исходная СК. Проверьте выбор."
+                QCoreApplication.translate(
+                    "ImportDialog",
+                    "⚠ Внимание: данные и выбранная СК не согласованы по единицам.\n"
+                    "Возможно, выбрана неверная исходная СК. Проверьте выбор.",
+                )
             )
             self.crs_warning.setVisible(True)
         else:
@@ -1886,7 +2083,7 @@ class ImportDialog(QDialog):
             self.cb_vertices.setVisible(True)
             self.cb_numbering.setVisible(True)
         else:
-            geom = self.geom_combo.currentText()
+            geom = _geom_key(self.geom_combo.currentText())
             is_point = geom == "Точка"
             show_poly = geom in ("Полигон", "Многоконтурный полигон")
             self.poly_style_label.setVisible(show_poly)
@@ -1915,15 +2112,27 @@ class ImportDialog(QDialog):
         """Возвращает две подписи координат в порядке колонок."""
         units = self._current_units()
         if units == "degrees":
-            if self.order_combo.currentText().startswith("Широта"):
-                return ["Широта", "Долгота"]
+            if _order_key(self.order_combo.currentText()).startswith("Широта"):
+                return [
+                    QCoreApplication.translate("KYB", "Широта"),
+                    QCoreApplication.translate("KYB", "Долгота"),
+                ]
             else:
-                return ["Долгота", "Широта"]
+                return [
+                    QCoreApplication.translate("KYB", "Долгота"),
+                    QCoreApplication.translate("KYB", "Широта"),
+                ]
         else:
-            if self.axes_combo.currentText().startswith("Восток"):
-                return ["Восток", "Север"]
+            if _axes_key(self.axes_combo.currentText()).startswith("Восток"):
+                return [
+                    QCoreApplication.translate("KYB", "Восток"),
+                    QCoreApplication.translate("KYB", "Север"),
+                ]
             else:
-                return ["Север", "Восток"]
+                return [
+                    QCoreApplication.translate("KYB", "Север"),
+                    QCoreApplication.translate("KYB", "Восток"),
+                ]
 
     def _update_axis_labels(self):
         """Обновляет подписи всех полей координат.
@@ -2023,8 +2232,12 @@ class ImportDialog(QDialog):
         w = QWidget()
         h = QHBoxLayout(w)
         h.setContentsMargins(0, 0, 0, 0)
-        self.x_combo, self.x_label = self._add_col_combo(h, "Север:")
-        self.y_combo, self.y_label = self._add_col_combo(h, "Восток:")
+        self.x_combo, self.x_label = self._add_col_combo(
+            h, QCoreApplication.translate("ImportDialog", "Север:")
+        )
+        self.y_combo, self.y_label = self._add_col_combo(
+            h, QCoreApplication.translate("ImportDialog", "Восток:")
+        )
         h.addStretch(1)
         return w
 
@@ -2038,8 +2251,12 @@ class ImportDialog(QDialog):
         w = QWidget()
         h = QHBoxLayout(w)
         h.setContentsMargins(0, 0, 0, 0)
-        self.c1_combo, self.c1_label = self._add_col_combo(h, "Широта:")
-        self.c2_combo, self.c2_label = self._add_col_combo(h, "Долгота:")
+        self.c1_combo, self.c1_label = self._add_col_combo(
+            h, QCoreApplication.translate("ImportDialog", "Широта:")
+        )
+        self.c2_combo, self.c2_label = self._add_col_combo(
+            h, QCoreApplication.translate("ImportDialog", "Долгота:")
+        )
         h.addStretch(1)
         return w
 
@@ -2054,7 +2271,7 @@ class ImportDialog(QDialog):
         h = QHBoxLayout(w)
         h.setContentsMargins(0, 0, 0, 0)
 
-        self.c1h_label = QLabel("Широта:")
+        self.c1h_label = QLabel(QCoreApplication.translate("ImportDialog", "Широта:"))
         h.addWidget(self.c1h_label)
         self.c1d, _ = self._add_col_combo(h, "")
         h.addWidget(QLabel("°"))
@@ -2065,7 +2282,7 @@ class ImportDialog(QDialog):
 
         h.addSpacing(15)
 
-        self.c2h_label = QLabel("Долгота:")
+        self.c2h_label = QLabel(QCoreApplication.translate("ImportDialog", "Долгота:"))
         h.addWidget(self.c2h_label)
         self.c2d, _ = self._add_col_combo(h, "")
         h.addWidget(QLabel("°"))
@@ -2101,7 +2318,7 @@ class ImportDialog(QDialog):
         s = QgsSettings()
         try:
             v = s.value(SETTINGS_PREFIX + "delim", "авто", type=str)
-            i = self.delim.findText(v)
+            i = self.delim.findText(_delim_display(v))
             if i >= 0:
                 self.delim.setCurrentIndex(i)
 
@@ -2111,7 +2328,7 @@ class ImportDialog(QDialog):
                 self.enc.setCurrentIndex(i)
 
             v = s.value(SETTINGS_PREFIX + "geometry", "Точка", type=str)
-            i = self.geom_combo.findText(v)
+            i = self.geom_combo.findText(_geom_display(v))
             if i >= 0:
                 self.geom_combo.setCurrentIndex(i)
 
@@ -2163,19 +2380,32 @@ class ImportDialog(QDialog):
         """Сохраняет текущие значения полей в QgsSettings."""
         s = QgsSettings()
         try:
-            s.setValue(SETTINGS_PREFIX + "delim", self.delim.currentText())
+            s.setValue(SETTINGS_PREFIX + "delim", _delim_key(self.delim.currentText()))
             s.setValue(SETTINGS_PREFIX + "encoding", self.enc.currentText())
-            s.setValue(SETTINGS_PREFIX + "geometry", self.geom_combo.currentText())
+            s.setValue(
+                SETTINGS_PREFIX + "geometry",
+                _geom_key(self.geom_combo.currentText()),
+            )
             s.setValue(SETTINGS_PREFIX + "crs", self.crs_widget.crs().authid())
-            s.setValue(SETTINGS_PREFIX + "poly_style", self.poly_style.currentText())
-            s.setValue(SETTINGS_PREFIX + "order", self.order_combo.currentText())
-            s.setValue(SETTINGS_PREFIX + "axes", self.axes_combo.currentText())
+            s.setValue(
+                SETTINGS_PREFIX + "poly_style",
+                _poly_style_key(self.poly_style.currentText()),
+            )
+            s.setValue(
+                SETTINGS_PREFIX + "order",
+                _order_key(self.order_combo.currentText()),
+            )
+            s.setValue(
+                SETTINGS_PREFIX + "axes",
+                _axes_key(self.axes_combo.currentText()),
+            )
             s.setValue(SETTINGS_PREFIX + "numbering", self.cb_numbering.isChecked())
             s.setValue(SETTINGS_PREFIX + "vertices", self.cb_vertices.isChecked())
             s.setValue(SETTINGS_PREFIX + "save_path", self.save_path_edit.text())
             s.setValue(SETTINGS_PREFIX + "save_enabled", self.cb_save_file.isChecked())
             s.setValue(
-                SETTINGS_PREFIX + "vnum_mode", self.vnum_mode_combo.currentText()
+                SETTINGS_PREFIX + "vnum_mode",
+                _vnum_mode_key(self.vnum_mode_combo.currentText()),
             )
             s.setValue(SETTINGS_PREFIX + "vnum_col", self.vnum_col_combo.currentText())
         except Exception as e:  # noqa: BLE001 — слот не должен ронять плагин
@@ -2263,7 +2493,7 @@ class ImportDialog(QDialog):
         Толщина контура — poly_outline_width.
         """
         ds = self.display_settings
-        style = self.poly_style.currentText()
+        style = _poly_style_key(self.poly_style.currentText())
 
         outline_color = ds.get("poly_outline_color", QColor(230, 0, 0, 220))
         outline_width = ds.get("poly_outline_width", 2)
@@ -2329,7 +2559,7 @@ class ImportDialog(QDialog):
             self.map_canvas.refresh()
             return
 
-        geom_name = self.geom_combo.currentText()
+        geom_name = _geom_key(self.geom_combo.currentText())
         wkb = GEOM_WKB[geom_name]
         is_point = wkb == _QgsWkbTypesType_Point
         is_poly = wkb in (_QgsWkbTypesType_Polygon, _QgsWkbTypesType_MultiPolygon)
@@ -2407,7 +2637,11 @@ class ImportDialog(QDialog):
                 self._make_area_label_layer(area_data, self.crs_widget.crs())
 
             self._total_area_m2 = total
-            self.total_area_label.setText(f"Общая площадь: {total:.2f} м²")
+            self.total_area_label.setText(
+                QCoreApplication.translate(
+                    "ImportDialog", "Общая площадь: {area} м²"
+                ).format(area=f"{total:.2f}")
+            )
             self.total_area_label.setVisible(True)
 
         # Обновляем список слоёв на канве — номера и площади вместе.
@@ -2530,7 +2764,9 @@ class ImportDialog(QDialog):
 
         if self._total_area_m2 > 0:
             self.total_area_label.setText(
-                f"Общая площадь: {self._total_area_m2:.2f} м²"
+                QCoreApplication.translate(
+                    "ImportDialog", "Общая площадь: {area} м²"
+                ).format(area=f"{self._total_area_m2:.2f}")
             )
             self.total_area_label.setVisible(True)
 
@@ -2597,9 +2833,10 @@ class ImportDialog(QDialog):
         layer.updateFields()
 
         feats = []
+        area_unit = QCoreApplication.translate("ImportDialog", "м²")
         for num, area_text, pt in pts_data:
             # HTML-разметка: S с нижним индексом = площадь + единицы.
-            label = f"S<sub>{num}</sub>={area_text} м²"
+            label = f"S<sub>{num}</sub>={area_text} {area_unit}"
             f = QgsFeature(layer.fields())
             f.setGeometry(QgsGeometry.fromPointXY(pt))
             f.setAttributes([label])
@@ -2754,16 +2991,20 @@ class ImportDialog(QDialog):
             • Excel — .xls, .xlsx, .ods (через GDAL/OGR);
             • пространственные — .shp, .geojson, .json, .kml, .gpkg.
         """
+        ctx = "ImportDialog"
         path, _ = QFileDialog.getOpenFileName(
             self,
-            "Файл",
+            QCoreApplication.translate(ctx, "Файл"),
             "",
-            "Все поддерживаемые (*.csv *.txt *.tab *.xls *.xlsx *.ods "
-            "*.shp *.geojson *.json *.kml *.gpkg);;"
-            "Текстовые (*.csv *.txt *.tab);;"
-            "Excel (*.xls *.xlsx *.ods);;"
-            "Пространственные (*.shp *.geojson *.json *.kml *.gpkg);;"
-            "Все файлы (*.*)",
+            QCoreApplication.translate(
+                ctx,
+                "Все поддерживаемые (*.csv *.txt *.tab *.xls *.xlsx *.ods "
+                "*.shp *.geojson *.json *.kml *.gpkg);;"
+                "Текстовые (*.csv *.txt *.tab);;"
+                "Excel (*.xls *.xlsx *.ods);;"
+                "Пространственные (*.shp *.geojson *.json *.kml *.gpkg);;"
+                "Все файлы (*.*)",
+            ),
         )
         if not path:
             return
@@ -2771,8 +3012,12 @@ class ImportDialog(QDialog):
 
     def on_browse_save(self):
         """Открывает диалог сохранения .gpkg и проставляет путь."""
+        ctx = "ImportDialog"
         path, _ = QFileDialog.getSaveFileName(
-            self, "Сохранить в GeoPackage", "", "GeoPackage (*.gpkg)"
+            self,
+            QCoreApplication.translate(ctx, "Сохранить в GeoPackage"),
+            "",
+            QCoreApplication.translate(ctx, "GeoPackage (*.gpkg)"),
         )
         if not path:
             return
@@ -2790,6 +3035,7 @@ class ImportDialog(QDialog):
               через OGR как готовая геометрия;
             • всё остальное — как текстовый файл в выбранной кодировке.
         """
+        ctx = "ImportDialog"
         # Сбрасываем всё, что осталось от предыдущей загрузки.
         self._reset_before_load()
 
@@ -2810,15 +3056,29 @@ class ImportDialog(QDialog):
             with open(path, "r", encoding=self._py_encoding()) as f:
                 text = f.read()
         except (OSError, UnicodeDecodeError, LookupError) as e:
-            QMessageBox.warning(self, "Ошибка", f"Не удалось прочитать файл:\n{e}")
+            _msg_warning(
+                self,
+                QCoreApplication.translate(ctx, "Ошибка"),
+                QCoreApplication.translate(
+                    ctx, "Не удалось прочитать файл:\n{e}"
+                ).format(e=e),
+            )
             return
-        self._load_text(text, source=f"файл «{path}»")
+        self._load_text(
+            text,
+            source=QCoreApplication.translate(ctx, "файл «{path}»").format(path=path),
+        )
 
     def on_clipboard(self):
         """Загружает текст из буфера обмена."""
+        ctx = "ImportDialog"
         text = QApplication.clipboard().text()
         if not text.strip():
-            QMessageBox.warning(self, "Пусто", "В буфере нет текста")
+            _msg_warning(
+                self,
+                QCoreApplication.translate(ctx, "Пусто"),
+                QCoreApplication.translate(ctx, "В буфере нет текста"),
+            )
             return
 
         # Сбрасываем всё, что осталось от предыдущей загрузки,
@@ -2826,7 +3086,10 @@ class ImportDialog(QDialog):
         self._reset_before_load()
         self.file_edit.clear()
 
-        self._load_text(text, source="буфер обмена")
+        self._load_text(
+            text,
+            source=QCoreApplication.translate(ctx, "буфер обмена"),
+        )
 
     def _reset_before_load(self):
         """Сбрасывает состояние перед загрузкой нового источника.
@@ -2935,12 +3198,12 @@ class ImportDialog(QDialog):
 
     def _current_delim(self):
         """Возвращает символ-разделитель с учётом режима 'авто'."""
-        name = self.delim.currentText()
-        if name == "авто":
+        key = _delim_key(self.delim.currentText())
+        if key == "авто":
             if self._source_text:
                 return self._detect_delimiter(self._source_text)
             return "\t"
-        return DELIMS.get(name) or "\t"
+        return DELIMS.get(key) or "\t"
 
     def _detect_delimiter(self, text):
         """Автоопределение разделителя.
@@ -3024,19 +3287,26 @@ class ImportDialog(QDialog):
 
     def _load_excel_file(self, path):
         """Читает Excel через GDAL/OGR и загружает как таблицу."""
+        ctx = "ImportDialog"
         blocks = self._read_excel_via_ogr(path)
         if blocks is None:
-            QMessageBox.warning(
+            _msg_warning(
                 self,
-                "Не удалось прочитать Excel",
-                f"Файл «{path}» не читается через GDAL/OGR.\n\n"
-                f"Возможные причины:\n"
-                f"  • файл повреждён или защищён паролем;\n"
-                f"  • формат не поддерживается сборкой GDAL.\n\n"
-                f"Откройте файл в Excel/LibreOffice и сохраните в .csv.",
+                QCoreApplication.translate(ctx, "Не удалось прочитать Excel"),
+                QCoreApplication.translate(
+                    ctx,
+                    "Файл «{path}» не читается через GDAL/OGR.\n\n"
+                    "Возможные причины:\n"
+                    "  • файл повреждён или защищён паролем;\n"
+                    "  • формат не поддерживается сборкой GDAL.\n\n"
+                    "Откройте файл в Excel/LibreOffice и сохраните в .csv.",
+                ).format(path=path),
             )
             return
-        self._load_from_blocks(blocks, source=f"Excel «{path}»")
+        self._load_from_blocks(
+            blocks,
+            source=QCoreApplication.translate(ctx, "Excel «{path}»").format(path=path),
+        )
 
     def _read_excel_via_ogr(self, path):
         """Читает первый непустой лист Excel через OGR.
@@ -3103,29 +3373,43 @@ class ImportDialog(QDialog):
         blocks[0].insert(0, headers)
         return blocks
 
-    def _load_from_blocks(self, blocks, source="данные"):
+    def _load_from_blocks(self, blocks, source=None):
         """Загружает уже разобранные блоки (например, из Excel).
 
         Разделитель не применяется — данные пришли готовыми.
         _source_text остаётся пустым, чтобы смена разделителя
         не пыталась пересобрать таблицу.
         """
+        ctx = "ImportDialog"
+        if source is None:
+            source = QCoreApplication.translate(ctx, "данные")
         self._source_text = ""
 
         if not blocks:
-            QMessageBox.warning(self, "Пусто", "Нет данных")
+            _msg_warning(
+                self,
+                QCoreApplication.translate(ctx, "Пусто"),
+                QCoreApplication.translate(ctx, "Нет данных"),
+            )
             return
 
         ok, num_cells, _nonempty_cells, total_rows = self._looks_like_coords(blocks)
         if not ok:
-            QMessageBox.warning(
+            _msg_warning(
                 self,
-                "Не похоже на координаты",
-                f"Загруженные данные ({source}) не похожи на таблицу "
-                f"с координатами.\n\n"
-                f"Строк: {total_rows}\n"
-                f"Из них чисел: {num_cells}\n\n"
-                f"Проверьте, что в файле есть колонки с координатами.",
+                QCoreApplication.translate(ctx, "Не похоже на координаты"),
+                QCoreApplication.translate(
+                    ctx,
+                    "Загруженные данные ({source}) не похожи на таблицу "
+                    "с координатами.\n\n"
+                    "Строк: {total_rows}\n"
+                    "Из них чисел: {num_cells}\n\n"
+                    "Проверьте, что в файле есть колонки с координатами.",
+                ).format(
+                    source=source,
+                    total_rows=total_rows,
+                    num_cells=num_cells,
+                ),
             )
             return
 
@@ -3140,16 +3424,20 @@ class ImportDialog(QDialog):
         видит превью-карту и таблицу, но в проект ничего не попадает,
         пока он не нажмёт «Импортировать».
         """
+        ctx = "ImportDialog"
         parts = self._read_spatial_via_ogr(path)
         if not parts:
-            QMessageBox.warning(
+            _msg_warning(
                 self,
-                "Не удалось прочитать файл",
-                f"Файл «{path}» не читается через GDAL/OGR.\n\n"
-                f"Возможные причины:\n"
-                f"  • файл повреждён;\n"
-                f"  • это не пространственный файл;\n"
-                f"  • формат не поддерживается сборкой GDAL.",
+                QCoreApplication.translate(ctx, "Не удалось прочитать файл"),
+                QCoreApplication.translate(
+                    ctx,
+                    "Файл «{path}» не читается через GDAL/OGR.\n\n"
+                    "Возможные причины:\n"
+                    "  • файл повреждён;\n"
+                    "  • это не пространственный файл;\n"
+                    "  • формат не поддерживается сборкой GDAL.",
+                ).format(path=path),
             )
             return
 
@@ -3169,11 +3457,11 @@ class ImportDialog(QDialog):
         try:
             base = QgsWkbTypes.geometryType(parts[0]["wkb"])
             if base == _QgsWkbTypesGeom_Point:
-                i = self.geom_combo.findText("Точка")
+                i = self.geom_combo.findText(_geom_display("Точка"))
             elif base == _QgsWkbTypesGeom_Line:
-                i = self.geom_combo.findText("Линия")
+                i = self.geom_combo.findText(_geom_display("Линия"))
             else:
-                i = self.geom_combo.findText("Полигон")
+                i = self.geom_combo.findText(_geom_display("Полигон"))
             if i >= 0:
                 self.geom_combo.setCurrentIndex(i)
         except Exception as e:  # noqa: BLE001 — слот не должен ронять плагин
@@ -3192,7 +3480,11 @@ class ImportDialog(QDialog):
 
         total = sum(len(p["features"]) for p in parts)
         self.iface.messageBar().pushInfo(
-            "Импорт", f"Загружено объектов: {total} (слоёв по типам: {len(parts)})"
+            QCoreApplication.translate("ImportDialog", "Импорт"),
+            QCoreApplication.translate(
+                "ImportDialog",
+                "Загружено объектов: {total} (слоёв по типам: {layers})",
+            ).format(total=total, layers=len(parts)),
         )
 
     def _read_spatial_via_ogr(self, path):
@@ -3260,12 +3552,12 @@ class ImportDialog(QDialog):
         def type_name(wkb):
             base = QgsWkbTypes.geometryType(wkb)
             if base == _QgsWkbTypesGeom_Point:
-                return "Точки"
+                return QCoreApplication.translate("KYB", "Точки")
             if base == _QgsWkbTypesGeom_Line:
-                return "Линии"
+                return QCoreApplication.translate("KYB", "Линии")
             if base == _QgsWkbTypesGeom_Polygon:
-                return "Полигоны"
-            return "Объекты"
+                return QCoreApplication.translate("KYB", "Полигоны")
+            return QCoreApplication.translate("KYB", "Объекты")
 
         for base, info in groups.items():
             name = type_name(info["wkb"])
@@ -3301,7 +3593,7 @@ class ImportDialog(QDialog):
 
         return result
 
-    def _load_text(self, text, source="данные"):
+    def _load_text(self, text, source=None):
         """Загружает текст и запускает разбор.
 
         Если текущий разделитель не даёт распознать данные как
@@ -3318,6 +3610,10 @@ class ImportDialog(QDialog):
             5. Согласен — меняем разделитель и парсим заново.
                Отказался — показываем исходное сообщение об ошибке.
         """
+        ctx = "ImportDialog"
+        if source is None:
+            source = QCoreApplication.translate(ctx, "данные")
+
         self._source_text = text
         delim = self._current_delim()
         blocks = self._parse_text(text, delim)
@@ -3331,16 +3627,16 @@ class ImportDialog(QDialog):
                 return
 
         # Пробуем альтернативы.
-        current_name = self.delim.currentText()
-        all_names = ["авто", "таб", "запятая", "точка с запятой", "пробел"]
-        candidates = [n for n in all_names if n != current_name]
+        current_key = _delim_key(self.delim.currentText())
+        all_keys = list(DELIMS.keys())
+        candidates = [k for k in all_keys if k != current_key]
 
-        best_name = None
-        for name in candidates:
-            if name == "авто":
+        best_key = None
+        for key in candidates:
+            if key == "авто":
                 d = self._detect_delimiter(text)
             else:
-                d = DELIMS.get(name)
+                d = DELIMS.get(key)
             if d is None:
                 continue
 
@@ -3349,19 +3645,25 @@ class ImportDialog(QDialog):
                 continue
             ok, _, _, _ = self._looks_like_coords(b)
             if ok:
-                best_name = name
+                best_key = key
                 break
 
         # Нашли альтернативу — спрашиваем пользователя.
-        if best_name is not None:
-            ans = QMessageBox.question(
+        if best_key is not None:
+            ans = _msg_question(
                 self,
-                "Возможно, другой разделитель",
-                f"Текущий разделитель «{current_name}» не подходит "
-                f"для этих данных.\n\n"
-                f"С разделителем «{best_name}» данные распознаются "
-                f"как координаты.\n\n"
-                f"Переключить разделитель на «{best_name}»?",
+                QCoreApplication.translate(ctx, "Возможно, другой разделитель"),
+                QCoreApplication.translate(
+                    ctx,
+                    "Текущий разделитель «{current}» не подходит "
+                    "для этих данных.\n\n"
+                    "С разделителем «{best}» данные распознаются "
+                    "как координаты.\n\n"
+                    "Переключить разделитель на «{best}»?",
+                ).format(
+                    current=_delim_display(current_key),
+                    best=_delim_display(best_key),
+                ),
                 _QMessageBox_Yes | _QMessageBox_No,
                 _QMessageBox_Yes,
             )
@@ -3370,7 +3672,7 @@ class ImportDialog(QDialog):
                 # Меняем разделитель без вызова _reload_from_source —
                 # он бы снова дёрнул парсинг и получилась рекурсия.
                 self.delim.blockSignals(True)
-                i = self.delim.findText(best_name)
+                i = self.delim.findText(_delim_display(best_key))
                 if i >= 0:
                     self.delim.setCurrentIndex(i)
                 self.delim.blockSignals(False)
@@ -3384,27 +3686,39 @@ class ImportDialog(QDialog):
 
         # Ничего не подошло — стандартные сообщения об ошибке.
         if not blocks:
-            QMessageBox.warning(self, "Пусто", "Нет данных")
+            _msg_warning(
+                self,
+                QCoreApplication.translate(ctx, "Пусто"),
+                QCoreApplication.translate(ctx, "Нет данных"),
+            )
             self._source_text = ""
             return
 
         ok, num_cells, nonempty_cells, total_rows = self._looks_like_coords(blocks)
-        QMessageBox.warning(
+        _msg_warning(
             self,
-            "Не похоже на координаты",
-            f"Загруженные данные ({source}) не похожи на таблицу "
-            f"с координатами.\n\n"
-            f"Строк: {total_rows}\n"
-            f"Непустых ячеек: {nonempty_cells}\n"
-            f"Из них чисел: {num_cells}\n\n"
-            f"Проверьте разделитель и кодировку.\n\n"
-            f"Ожидается таблица, где в каждой строке — точка, а в "
-            f"колонках — числа.\n\n"
-            f"Примеры:\n"
-            f"  55.7244\t36.3638\n"
-            f"  465457.47\t1305443.78\n"
-            f"  55°43'28.05\"\t36°21'49.94\"\n"
-            f"  55\t43\t28.05\t36\t21\t49.94",
+            QCoreApplication.translate(ctx, "Не похоже на координаты"),
+            QCoreApplication.translate(
+                ctx,
+                "Загруженные данные ({source}) не похожи на таблицу "
+                "с координатами.\n\n"
+                "Строк: {total_rows}\n"
+                "Непустых ячеек: {nonempty_cells}\n"
+                "Из них чисел: {num_cells}\n\n"
+                "Проверьте разделитель и кодировку.\n\n"
+                "Ожидается таблица, где в каждой строке — точка, а в "
+                "колонках — числа.\n\n"
+                "Примеры:\n"
+                "  55.7244\t36.3638\n"
+                "  465457.47\t1305443.78\n"
+                "  55°43'28.05\"\t36°21'49.94\"\n"
+                "  55\t43\t28.05\t36\t21\t49.94",
+            ).format(
+                source=source,
+                total_rows=total_rows,
+                nonempty_cells=nonempty_cells,
+                num_cells=num_cells,
+            ),
         )
         self._source_text = ""
 
@@ -3536,9 +3850,14 @@ class ImportDialog(QDialog):
             self.headers = [f"col{i + 1}" for i in range(n)]
             data_blocks = [list(b) for b in self.blocks]
 
-        self.headers_label.setText(
-            "Заголовки: есть" if has_headers else "Заголовки: нет"
-        )
+        if has_headers:
+            self.headers_label.setText(
+                QCoreApplication.translate("ImportDialog", "Заголовки: есть")
+            )
+        else:
+            self.headers_label.setText(
+                QCoreApplication.translate("ImportDialog", "Заголовки: нет")
+            )
 
         flat = []
         for bi, b in enumerate(data_blocks):
@@ -3567,9 +3886,14 @@ class ImportDialog(QDialog):
 
         self.detected_format = self._detect_format()
         units = self._current_units()
-        units_ru = "градусы" if units == "degrees" else "метры"
+        labels = _fmt_labels()
+        units_text = QCoreApplication.translate(
+            "KYB", "градусы" if units == "degrees" else "метры"
+        )
         self.format_label.setText(
-            f"Формат: {FMT_LABELS[self.detected_format]} ({units_ru})"
+            QCoreApplication.translate(
+                "ImportDialog", "Формат: {fmt} ({units})"
+            ).format(fmt=labels[self.detected_format], units=units_text)
         )
 
         idx = {FMT_DECIMAL: 0, FMT_HMS_ONE: 1, FMT_HMS_THREE: 2}[self.detected_format]
@@ -3779,13 +4103,13 @@ class ImportDialog(QDialog):
 
             units = self._current_units()
             if units == "degrees":
-                if self.order_combo.currentText().startswith("Широта"):
+                if _order_key(self.order_combo.currentText()).startswith("Широта"):
                     lat, lon = v1, v2
                 else:
                     lat, lon = v2, v1
                 return lon, lat
             else:
-                if self.axes_combo.currentText().startswith("Восток"):
+                if _axes_key(self.axes_combo.currentText()).startswith("Восток"):
                     east, north = v1, v2
                 else:
                     north, east = v1, v2
@@ -3805,7 +4129,7 @@ class ImportDialog(QDialog):
             b, err = parse_hms_one(v2)
             if b is None:
                 raise ValueError(f"Коорд.2 = {v2!r}: {err}")
-            if self.order_combo.currentText().startswith("Широта"):
+            if _order_key(self.order_combo.currentText()).startswith("Широта"):
                 lat, lon = a, b
             else:
                 lat, lon = b, a
@@ -3834,7 +4158,7 @@ class ImportDialog(QDialog):
             b, err = _hms_to_dec(nums[3], nums[4], nums[5])
             if b is None:
                 raise ValueError(f"Коорд.2: {err}")
-            if self.order_combo.currentText().startswith("Широта"):
+            if _order_key(self.order_combo.currentText()).startswith("Широта"):
                 lat, lon = a, b
             else:
                 lat, lon = b, a
@@ -3848,13 +4172,13 @@ class ImportDialog(QDialog):
         units = self._current_units()
         if units == "degrees":
             lon, lat = east_or_lon, north_or_lat
-            if labels[0] == "Широта":
+            if labels[0] == QCoreApplication.translate("KYB", "Широта"):
                 return lat, lon
             else:
                 return lon, lat
         else:
             east, north = east_or_lon, north_or_lat
-            if labels[0] == "Север":
+            if labels[0] == QCoreApplication.translate("KYB", "Север"):
                 return north, east
             else:
                 return east, north
@@ -3891,22 +4215,25 @@ class ImportDialog(QDialog):
         self.preview.clear()
 
         # Единицы и подписи колонок — по СК файла.
+        ctx = "ImportDialog"
         crs = self.spatial_data[0]["layer"].crs()
         is_geo = crs.isGeographic() if crs and crs.isValid() else False
         if is_geo:
-            c1_label, c2_label = "Широта", "Долгота"
+            c1_label = QCoreApplication.translate(ctx, "Широта")
+            c2_label = QCoreApplication.translate(ctx, "Долгота")
         else:
-            c1_label, c2_label = "Север", "Восток"
+            c1_label = QCoreApplication.translate(ctx, "Север")
+            c2_label = QCoreApplication.translate(ctx, "Восток")
 
         headers = [
-            "№",
-            "№верш",
-            "Тип",
+            QCoreApplication.translate(ctx, "№"),
+            QCoreApplication.translate(ctx, "№верш"),
+            QCoreApplication.translate(ctx, "Тип"),
             c1_label,
             c2_label,
-            "Площадь, м²",
-            "Площадь, га",
-            "Периметр/длина, м",
+            QCoreApplication.translate(ctx, "Площадь, м²"),
+            QCoreApplication.translate(ctx, "Площадь, га"),
+            QCoreApplication.translate(ctx, "Периметр/длина, м"),
         ]
         self.preview.setColumnCount(len(headers))
         self.preview.setHorizontalHeaderLabels(headers)
@@ -3921,11 +4248,11 @@ class ImportDialog(QDialog):
         for part in self.spatial_data:
             base = QgsWkbTypes.geometryType(part["wkb"])
             if base == _QgsWkbTypesGeom_Point:
-                type_label = "Точка"
+                type_label = QCoreApplication.translate(ctx, "Точка")
             elif base == _QgsWkbTypesGeom_Line:
-                type_label = "Линия"
+                type_label = QCoreApplication.translate(ctx, "Линия")
             else:
-                type_label = "Полигон"
+                type_label = QCoreApplication.translate(ctx, "Полигон")
 
             # Между группами разных типов (точки/линии/полигоны)
             # ставим серый разделитель, если это не первая группа.
@@ -4012,7 +4339,11 @@ class ImportDialog(QDialog):
                 and row_data[0] == "skipped"
             ):
                 count = row_data[1]
-                item = QTableWidgetItem(f"... скрыто вершин: {count} ...")
+                item = QTableWidgetItem(
+                    QCoreApplication.translate(
+                        ctx, "... скрыто вершин: {count} ..."
+                    ).format(count=count)
+                )
                 item.setBackground(QColor(240, 240, 240))
                 item.setForeground(QColor(120, 120, 120))
                 self.preview.setItem(i, 0, item)
@@ -4059,7 +4390,7 @@ class ImportDialog(QDialog):
                     pblock.append((0, 0, row))
             parsed_blocks.append(pblock)
 
-        wkb = GEOM_WKB[self.geom_combo.currentText()]
+        wkb = GEOM_WKB[_geom_key(self.geom_combo.currentText())]
         meta, _ = self._calculate_meta(parsed_blocks, wkb)
 
         objects_data = self._build_objects_data(parsed_blocks, wkb)
@@ -4114,16 +4445,17 @@ class ImportDialog(QDialog):
                 display.append(("skipped", len(obj_rows) - MAX_VERTICES_PER_OBJECT))
                 self._preview_map.append(None)
 
+        ctx = "ImportDialog"
         labels = self._axis_labels()
         headers = list(self.headers) + [
-            "→ №",
-            "→ №верш",
-            "→ Тип",
-            f"→ {labels[0]}",
-            f"→ {labels[1]}",
-            "→ Площадь, м²",
-            "→ Площадь, га",
-            "→ Периметр/длина, м",
+            QCoreApplication.translate(ctx, "→ №"),
+            QCoreApplication.translate(ctx, "→ №верш"),
+            QCoreApplication.translate(ctx, "→ Тип"),
+            QCoreApplication.translate(ctx, "→ {label}").format(label=labels[0]),
+            QCoreApplication.translate(ctx, "→ {label}").format(label=labels[1]),
+            QCoreApplication.translate(ctx, "→ Площадь, м²"),
+            QCoreApplication.translate(ctx, "→ Площадь, га"),
+            QCoreApplication.translate(ctx, "→ Периметр/длина, м"),
         ]
         self.preview.setColumnCount(len(headers))
         self.preview.setHorizontalHeaderLabels(headers)
@@ -4141,7 +4473,11 @@ class ImportDialog(QDialog):
 
             if isinstance(loc, tuple) and len(loc) == 2 and loc[0] == "skipped":
                 count = loc[1]
-                item = QTableWidgetItem(f"... скрыто вершин: {count} ...")
+                item = QTableWidgetItem(
+                    QCoreApplication.translate(
+                        ctx, "... скрыто вершин: {count} ..."
+                    ).format(count=count)
+                )
                 item.setBackground(QColor(240, 240, 240))
                 item.setForeground(QColor(120, 120, 120))
                 self.preview.setItem(i, 0, item)
@@ -4239,10 +4575,11 @@ class ImportDialog(QDialog):
             and self._preview_map[preview_row] is not None
         )
 
+        ctx = "ImportDialog"
         menu = QMenu(self)
-        act_copy = menu.addAction("Копировать")
-        act_add = menu.addAction("Добавить строку")
-        act_del = menu.addAction("Удалить строку")
+        act_copy = menu.addAction(QCoreApplication.translate(ctx, "Копировать"))
+        act_add = menu.addAction(QCoreApplication.translate(ctx, "Добавить строку"))
+        act_del = menu.addAction(QCoreApplication.translate(ctx, "Удалить строку"))
 
         act_copy.setEnabled(preview_row >= 0)
         act_add.setEnabled(is_data_row)
@@ -4391,18 +4728,22 @@ class ImportDialog(QDialog):
         Возвращает True, если можно продолжать импорт, и False — если
         пользователь отказался или СК невалидна.
         """
+        ctx = "ImportDialog"
         crs = self.crs_widget.crs()
 
         # --- Уровень 1: СК валидна ---
         if not crs.isValid():
             self.crs_frame.setStyleSheet(ERROR_STYLE_FRAME)
-            QMessageBox.warning(
+            _msg_warning(
                 self,
-                "Неверная система координат",
-                "Выбранная система координат не распознана QGIS.\n\n"
-                "Проверьте выбор исходной СК — откройте список и укажите "
-                "правильную. Если ваша СК отсутствует в списке, добавьте "
-                "её через «Настройки → Свои СК» и выберите здесь.",
+                QCoreApplication.translate(ctx, "Неверная система координат"),
+                QCoreApplication.translate(
+                    ctx,
+                    "Выбранная система координат не распознана QGIS.\n\n"
+                    "Проверьте выбор исходной СК — откройте список и укажите "
+                    "правильную. Если ваша СК отсутствует в списке, добавьте "
+                    "её через «Настройки → Свои СК» и выберите здесь.",
+                ),
             )
             return False
 
@@ -4412,24 +4753,26 @@ class ImportDialog(QDialog):
 
         warn = None
         if units == "degrees" and not crs_is_geographic:
-            warn = (
+            warn = QCoreApplication.translate(
+                ctx,
                 "Данные похожи на градусы (значения ≤ 180), "
                 "а выбранная СК — проекционная (в метрах).\n\n"
                 "Возможно, выбранная СК не подходит.\n\n"
-                "Продолжить импорт?"
+                "Продолжить импорт?",
             )
         elif units == "meters" and crs_is_geographic:
-            warn = (
+            warn = QCoreApplication.translate(
+                ctx,
                 "Данные похожи на метры (значения > 180), "
                 "а выбранная СК — географическая (в градусах).\n\n"
                 "Возможно, выбранная СК не подходит.\n\n"
-                "Продолжить импорт?"
+                "Продолжить импорт?",
             )
 
         if warn:
-            ans = QMessageBox.question(
+            ans = _msg_question(
                 self,
-                "Проверьте систему координат",
+                QCoreApplication.translate(ctx, "Проверьте систему координат"),
                 warn,
                 _QMessageBox_Yes | _QMessageBox_No,
                 _QMessageBox_No,
@@ -4445,6 +4788,7 @@ class ImportDialog(QDialog):
     # --------------------------------------------------------
     def on_import(self):
         """Собирает слой(и) и добавляет их в проект."""
+        ctx = "ImportDialog"
         # --- Имя слоя ---
         layer_name = self.layer_name_edit.text().strip()
         if not layer_name:
@@ -4459,8 +4803,12 @@ class ImportDialog(QDialog):
             return
 
         if not self.data_blocks:
-            QMessageBox.warning(
-                self, "Нет данных", "Сначала загрузи данные из буфера или файла"
+            _msg_warning(
+                self,
+                QCoreApplication.translate(ctx, "Нет данных"),
+                QCoreApplication.translate(
+                    ctx, "Сначала загрузи данные из буфера или файла"
+                ),
             )
             return
 
@@ -4468,10 +4816,13 @@ class ImportDialog(QDialog):
         save_to_file = self.cb_save_file.isChecked()
         save_path = self.save_path_edit.text().strip()
         if save_to_file and not save_path:
-            QMessageBox.warning(
+            _msg_warning(
                 self,
-                "Нет пути сохранения",
-                "Укажите путь к .gpkg или снимите галочку «Сохранить в файл».",
+                QCoreApplication.translate(ctx, "Нет пути сохранения"),
+                QCoreApplication.translate(
+                    ctx,
+                    "Укажите путь к .gpkg или снимите галочку «Сохранить в файл».",
+                ),
             )
             return
 
@@ -4505,27 +4856,38 @@ class ImportDialog(QDialog):
             parsed_blocks.append(pblock)
 
         if errors:
-            msg = "Найдены ошибки в данных:\n\n"
+            msg = QCoreApplication.translate(ctx, "Найдены ошибки в данных:\n\n")
             for n, e in errors:
-                msg += f"• Строка {n}: {e}\n"
+                msg += QCoreApplication.translate(ctx, "• Строка {n}: {e}\n").format(
+                    n=n, e=e
+                )
             if len(errors) >= 10:
-                msg += "\n(показаны первые 10 ошибок)"
-            msg += "\n\nШаблоны координат:\n"
-            msg += "  • десятичные: 55.7244\t36.3638\n"
-            msg += "  • ГМС одной колонкой: 55°43'28.05\"\t36°21'49.94\"\n"
-            msg += "  • ГМС тремя колонками: 55\t43\t28.05\t36\t21\t49.94\n"
-            msg += "\nИсправьте исходные данные и загрузите заново."
-            QMessageBox.warning(self, "Ошибки в данных", msg)
+                msg += QCoreApplication.translate(ctx, "\n(показаны первые 10 ошибок)")
+            msg += QCoreApplication.translate(
+                ctx,
+                "\n\nШаблоны координат:\n"
+                "  • десятичные: 55.7244\t36.3638\n"
+                "  • ГМС одной колонкой: 55°43'28.05\"\t36°21'49.94\"\n"
+                "  • ГМС тремя колонками: 55\t43\t28.05\t36\t21\t49.94\n"
+                "\nИсправьте исходные данные и загрузите заново.",
+            )
+            _msg_warning(self, QCoreApplication.translate(ctx, "Ошибки в данных"), msg)
             return
 
         if not any(parsed_blocks):
-            QMessageBox.warning(self, "Пусто", "Не удалось построить ни одного объекта")
+            _msg_warning(
+                self,
+                QCoreApplication.translate(ctx, "Пусто"),
+                QCoreApplication.translate(
+                    ctx, "Не удалось построить ни одного объекта"
+                ),
+            )
             return
 
         # --- Создание слоёв ---
-        geom_name = self.geom_combo.currentText()
-        wkb = GEOM_WKB[geom_name]
-        uri_geom = GEOM_URI[geom_name]
+        geom_key = _geom_key(self.geom_combo.currentText())
+        wkb = GEOM_WKB[geom_key]
+        uri_geom = GEOM_URI[geom_key]
         is_point = wkb == _QgsWkbTypesType_Point
         is_poly = wkb in (_QgsWkbTypesType_Polygon, _QgsWkbTypesType_MultiPolygon)
 
@@ -4538,7 +4900,7 @@ class ImportDialog(QDialog):
         main_layer = self._make_layer(uri_geom, crs, layer_name)
         feats, vertex_points = self._build_features(main_layer, wkb, parsed_blocks)
         if not feats:
-            QMessageBox.warning(self, "Пусто", "Не удалось построить ни одного объекта")
+            _msg_warning(self, "Пусто", "Не удалось построить ни одного объекта")
             return
         self._fill_layer(main_layer, feats)
 
@@ -4547,8 +4909,12 @@ class ImportDialog(QDialog):
         if save_to_file:
             ok, err = self._save_layer_to_gpkg(main_layer, save_path, layer_name)
             if not ok:
-                QMessageBox.critical(
-                    self, "Ошибка сохранения", f"Не удалось сохранить слой:\n{err}"
+                _msg_critical(
+                    self,
+                    QCoreApplication.translate(ctx, "Ошибка сохранения"),
+                    QCoreApplication.translate(
+                        ctx, "Не удалось сохранить слой:\n{err}"
+                    ).format(err=err),
                 )
                 return
             loaded = QgsVectorLayer(
@@ -4579,7 +4945,9 @@ class ImportDialog(QDialog):
 
         # --- Слой вершин ---
         if need_vertex_layer and vertex_points:
-            v_name = f"{layer_name} — вершины"
+            v_name = QCoreApplication.translate(ctx, "{name} — вершины").format(
+                name=layer_name
+            )
             v_layer = self._make_layer("Point", crs, v_name, vertex_only=True)
             v_feats = []
             for v_idx, pt in vertex_points:
@@ -4604,7 +4972,12 @@ class ImportDialog(QDialog):
                 _enable_number_labels(final_vertex)
             QgsProject.instance().addMapLayer(final_vertex)
 
-        self.iface.messageBar().pushSuccess("Импорт", f"Готово. Объектов: {len(feats)}")
+        self.iface.messageBar().pushSuccess(
+            QCoreApplication.translate(ctx, "Импорт"),
+            QCoreApplication.translate(ctx, "Готово. Объектов: {count}").format(
+                count=len(feats)
+            ),
+        )
         self.accept()
 
     def _import_spatial(self, layer_name):
@@ -4621,19 +4994,27 @@ class ImportDialog(QDialog):
             num, length_m (для линий)
             num (для точек)
         """
+        ctx = "ImportDialog"
         save_to_file = self.cb_save_file.isChecked()
         save_path = self.save_path_edit.text().strip()
         if save_to_file and not save_path:
-            QMessageBox.warning(
+            _msg_warning(
                 self,
-                "Нет пути сохранения",
-                "Укажите путь к .gpkg или снимите галочку «Сохранить в файл».",
+                QCoreApplication.translate(ctx, "Нет пути сохранения"),
+                QCoreApplication.translate(
+                    ctx,
+                    "Укажите путь к .gpkg или снимите галочку «Сохранить в файл».",
+                ),
             )
             return
 
         if not self.spatial_data:
-            QMessageBox.warning(
-                self, "Нет данных", "Сначала загрузи пространственный файл."
+            _msg_warning(
+                self,
+                QCoreApplication.translate(ctx, "Нет данных"),
+                QCoreApplication.translate(
+                    ctx, "Сначала загрузи пространственный файл."
+                ),
             )
             return
 
@@ -4641,16 +5022,19 @@ class ImportDialog(QDialog):
         units = self._current_units()
         added = 0
 
+        ctx = "ImportDialog"
         suffix_map = {
-            _QgsWkbTypesGeom_Point: "точки",
-            _QgsWkbTypesGeom_Line: "линии",
-            _QgsWkbTypesGeom_Polygon: "полигоны",
+            _QgsWkbTypesGeom_Point: QCoreApplication.translate(ctx, "точки"),
+            _QgsWkbTypesGeom_Line: QCoreApplication.translate(ctx, "линии"),
+            _QgsWkbTypesGeom_Polygon: QCoreApplication.translate(ctx, "полигоны"),
         }
 
         # Разделяем на выходные слои по каждому типу.
         for idx, part in enumerate(self.spatial_data, 1):
             base = QgsWkbTypes.geometryType(part["wkb"])
-            suffix = suffix_map.get(base, f"слой{idx}")
+            suffix = suffix_map.get(
+                base, QCoreApplication.translate(ctx, "слой{idx}").format(idx=idx)
+            )
             out_name = f"{layer_name} — {suffix}"
 
             # Источник полей — держатель из _read_spatial_via_ogr.
@@ -4744,10 +5128,19 @@ class ImportDialog(QDialog):
             added += 1
 
         if added == 0:
-            QMessageBox.warning(self, "Пусто", "Не удалось собрать ни одного слоя.")
+            _msg_warning(
+                self,
+                QCoreApplication.translate(ctx, "Пусто"),
+                QCoreApplication.translate(ctx, "Не удалось собрать ни одного слоя."),
+            )
             return
 
-        self.iface.messageBar().pushSuccess("Импорт", f"Добавлено слоёв: {added}")
+        self.iface.messageBar().pushSuccess(
+            QCoreApplication.translate(ctx, "Импорт"),
+            QCoreApplication.translate(ctx, "Добавлено слоёв: {count}").format(
+                count=added
+            ),
+        )
         self.accept()
 
     def _make_layer(self, uri_geom, crs, name, vertex_only=False):
@@ -4871,7 +5264,11 @@ class ImportDialog(QDialog):
             if is_point:
                 for ri, (x, y, row) in enumerate(block):
                     vnum_str = self._get_vertex_number(row, 1, global_vnum)
-                    meta[(bi, ri)] = (obj_num, vnum_str, "Точка")
+                    meta[(bi, ri)] = (
+                        obj_num,
+                        vnum_str,
+                        QCoreApplication.translate("KYB", "Точка"),
+                    )
                     row_vnum[id(row)] = vnum_str
                     obj_num += 1
                     global_vnum += 1
@@ -4886,7 +5283,11 @@ class ImportDialog(QDialog):
                     local_vnum = 1
                     for x, y, row, ri in pts:
                         vnum_str = self._get_vertex_number(row, local_vnum, global_vnum)
-                        meta[(bi, ri)] = (obj_num, vnum_str, "Полигон")
+                        meta[(bi, ri)] = (
+                            obj_num,
+                            vnum_str,
+                            QCoreApplication.translate("KYB", "Полигон"),
+                        )
                         row_vnum[id(row)] = vnum_str
                         local_vnum += 1
                         global_vnum += 1
@@ -4896,7 +5297,11 @@ class ImportDialog(QDialog):
                 local_vnum = 1
                 for ri, (x, y, row) in enumerate(block):
                     vnum_str = self._get_vertex_number(row, local_vnum, global_vnum)
-                    meta[(bi, ri)] = (obj_num, vnum_str, "Линия")
+                    meta[(bi, ri)] = (
+                        obj_num,
+                        vnum_str,
+                        QCoreApplication.translate("KYB", "Линия"),
+                    )
                     row_vnum[id(row)] = vnum_str
                     local_vnum += 1
                     global_vnum += 1
@@ -4985,7 +5390,10 @@ class ImportDialog(QDialog):
         if wkb == _QgsWkbTypesType_Point:
             for bi, block in enumerate(parsed_blocks):
                 for ri, (x, y, row) in enumerate(block):
-                    obj_num, _, _ = meta.get((bi, ri), (1, "1", "Точка"))
+                    obj_num, _, _ = meta.get(
+                        (bi, ri),
+                        (1, "1", QCoreApplication.translate("KYB", "Точка")),
+                    )
                     f = QgsFeature(layer.fields())
                     f.setGeometry(QgsGeometry.fromPointXY(QgsPointXY(x, y)))
                     f.setAttributes([obj_num, None])

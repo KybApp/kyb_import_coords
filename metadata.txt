@@ -1,7 +1,14 @@
 [general]
 ; --- Название ---
 name=Spatial Data Import
+name[en]=Spatial Data Import
 name[ru]=Импорт пространственных данных
+name[de]=Import räumlicher Daten
+name[fr]=Import de données spatiales
+name[es]=Importar datos espaciales
+name[it]=Importa dati spaziali
+name[zh]=空间数据导入
+name[kk]=Кеңістіктік деректерді импорттау
 
 ; --- Версии QGIS ---
 qgisMinimumVersion=3.28
@@ -9,10 +16,17 @@ qgisMaximumVersion=4.99
 
 ; --- Краткое описание ---
 description=Import and validate coordinates from text, Excel, and spatial files into QGIS vector layers.
+description[en]=Import and validate coordinates from text, Excel, and spatial files into QGIS vector layers.
 description[ru]=Импорт и проверка координат из текста, Excel и пространственных файлов в векторные слои QGIS.
+description[de]=Koordinaten aus Text-, Excel- und räumlichen Dateien in QGIS-Vektorlayer importieren und validieren.
+description[fr]=Importer et valider des coordonnées à partir de fichiers texte, Excel et spatiaux vers des couches vectorielles QGIS.
+description[es]=Importar y validar coordenadas de archivos de texto, Excel y espaciales en capas vectoriales de QGIS.
+description[it]=Importa e valida le coordinate da file di testo, Excel e file spaziali in layer vettoriali QGIS.
+description[zh]=将文本、Excel和空间文件中的坐标导入并校验到QGIS矢量图层中。
+description[kk]=Мәтіндік, Excel және кеңістіктік файлдардан координаттарды QGIS векторлық қабаттарына импорттау және тексеру.
 
 ; --- Версия плагина ---
-version=0.15.18
+version=0.16.0
 
 ; --- Автор ---
 author=Shershavin D.
@@ -23,11 +37,25 @@ category=Vector
 
 ; --- Теги ---
 tags=import, coordinates, csv, excel, shapefile, geojson, kml, area, preview, validation
+tags[en]=import, coordinates, csv, excel, shapefile, geojson, kml, area, preview, validation
 tags[ru]=импорт, координаты, csv, excel, shapefile, geojson, kml, площадь, предпросмотр, проверка
+tags[de]=import, koordinaten, csv, excel, shapefile, geojson, kml, fläche, vorschau, validierung
+tags[fr]=import, coordonnées, csv, excel, shapefile, geojson, kml, surface, aperçu, validation
+tags[es]=importar, coordenadas, csv, excel, shapefile, geojson, kml, área, vista previa, validación
+tags[it]=importa, coordinate, csv, excel, shapefile, geojson, kml, area, anteprima, validazione
+tags[zh]=导入, 坐标, csv, excel, shapefile, geojson, kml, 面积, 预览, 校验
+tags[kk]=импорт, координаттар, csv, excel, shapefile, geojson, kml, аудан, алдын ала қарау, тексеру
 
 ; --- Подробное описание ---
 about=Plugin for loading and previewing spatial data. Supports text files (CSV, TXT), Excel tables (XLS, XLSX, ODS), and GIS files (SHP, GeoJSON, KML, GPKG). Allows visual validation of coordinates, areas, and object configuration on a built-in map before importing into the project. Automatically detects coordinate systems, formats (decimal, DMS), and calculates metrics (area, perimeter, length).
+about[en]=Plugin for loading and previewing spatial data. Supports text files (CSV, TXT), Excel tables (XLS, XLSX, ODS), and GIS files (SHP, GeoJSON, KML, GPKG). Allows visual validation of coordinates, areas, and object configuration on a built-in map before importing into the project. Automatically detects coordinate systems, formats (decimal, DMS), and calculates metrics (area, perimeter, length).
 about[ru]=Плагин для загрузки и предварительной проверки пространственных данных. Поддерживает текстовые файлы (CSV, TXT), таблицы Excel (XLS, XLSX, ODS) и ГИС-файлы (SHP, GeoJSON, KML, GPKG). Позволяет визуально проверить координаты, площади и конфигурацию объектов на встроенной карте до импорта в проект. Автоматически определяет системы координат, форматы записи (десятичные, ГГММСС) и рассчитывает метрики (площадь, периметр, длину).
+about[de]=Plugin zum Laden und zur Vorschau räumlicher Daten. Unterstützt Textdateien (CSV, TXT), Excel-Tabellen (XLS, XLSX, ODS) und GIS-Dateien (SHP, GeoJSON, KML, GPKG). Ermöglicht die visuelle Validierung von Koordinaten, Flächen und Objektkonfigurationen auf einer integrierten Karte vor dem Import in das Projekt. Erkennt automatisch Koordinatensysteme, Formate (dezimal, DMS) und berechnet Metriken (Fläche, Umfang, Länge).
+about[fr]=Plugin pour charger et prévisualiser des données spatiales. Prend en charge les fichiers texte (CSV, TXT), les tableaux Excel (XLS, XLSX, ODS) et les fichiers SIG (SHP, GeoJSON, KML, GPKG). Permet la validation visuelle des coordonnées, des surfaces et de la configuration des objets sur une carte intégrée avant l'importation dans le projet. Détecte automatiquement les systèmes de coordonnées, les formats (décimal, DMS) et calcule les métriques (surface, périmètre, longueur).
+about[es]=Complemento para cargar y previsualizar datos espaciales. Admite archivos de texto (CSV, TXT), tablas de Excel (XLS, XLSX, ODS) y archivos SIG (SHP, GeoJSON, KML, GPKG). Permite la validación visual de coordenadas, áreas y configuración de objetos en un mapa integrado antes de importar al proyecto. Detecta automáticamente sistemas de coordenadas, formatos (decimal, DMS) y calcula métricas (área, perímetro, longitud).
+about[it]=Plugin per il caricamento e l'anteprima di dati spaziali. Supporta file di testo (CSV, TXT), tabelle Excel (XLS, XLSX, ODS) e file GIS (SHP, GeoJSON, KML, GPKG). Consente la validazione visiva di coordinate, aree e configurazione degli oggetti su una mappa integrata prima dell'importazione nel progetto. Rileva automaticamente i sistemi di coordinate, i formati (decimale, DMS) e calcola le metriche (area, perimetro, lunghezza).
+about[zh]=用于加载和预览空间数据的插件。支持文本文件 (CSV, TXT)、Excel 表格 (XLS, XLSX, ODS) 和 GIS 文件 (SHP, GeoJSON, KML, GPKG)。允许在导入项目之前在集成的 地图上对坐标、面积和对象配置进行可视化校验。自动检测坐标系统、格式（十进制、度分秒）并计算指标（面积、周长、长度）。
+about[kk]=Кеңістіктік деректерді жүктеуге және алдын ала қарауға арналған плагин. Мәтіндік файлдарды (CSV, TXT), Excel кестелерін (XLS, XLSX, ODS) және ГИС файлдарын (SHP, GeoJSON, KML, GPKG) қолдайды. Жобаға импорттау алдында кірістірілген картада координаттарды, аудандарды және нысандар конфигурациясын визуалды тексеруге мүмкіндік береді. Координат жүйелерін, форматтарын (ондық, ГМС) автоматты түрде анықтайды және метрикаларды (аудан, периметр, ұзындық) есептейді.
 
 ; --- Ссылки ---
 repository=https://github.com/KybApp/kyb_import_coords.git
