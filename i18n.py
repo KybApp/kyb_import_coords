@@ -55,7 +55,7 @@ class _TsTranslator(QTranslator):
 
     def load_ts(self, path):
         try:
-            with open(path, "r", encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 content = f.read()
         except OSError:
             return False

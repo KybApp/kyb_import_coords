@@ -3005,7 +3005,7 @@ class ImportDialog(QDialog):
 
         # Текстовый формат.
         try:
-            with open(path, "r", encoding=self._py_encoding()) as f:
+            with open(path, encoding=self._py_encoding()) as f:
                 text = f.read()
         except (OSError, UnicodeDecodeError, LookupError) as e:
             _msg_warning(

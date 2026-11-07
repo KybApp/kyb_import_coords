@@ -19,7 +19,7 @@ import glob
 import importlib
 import os
 import shutil
-import subprocess
+import subprocess  # nosec B404 — используется только для lrelease (фикс. аргументы)
 import sys
 
 PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -32,7 +32,7 @@ LANGUAGES = ["ru", "en", "de", "fr", "es", "it", "zh", "kk"]
 
 
 def extract_from_ast(filepath):
-    with open(filepath, "r", encoding="utf-8") as f:
+    with open(filepath, encoding="utf-8") as f:
         content = f.read()
     try:
         tree = ast.parse(content, filename=filepath)
@@ -298,7 +298,9 @@ def run_lrelease():
     for lang in LANGUAGES:
         ts = os.path.join(I18N_DIR, f"plugin_{lang}.ts")
         qm = os.path.join(I18N_DIR, f"plugin_{lang}.qm")
-        r = subprocess.run(
+        # nosec B603 — exe из find_lrelease(), аргументы фиксированы,
+        # shell=False (по умолчанию), без пользовательского ввода.
+        r = subprocess.run(  # nosec B603
             [exe, ts, "-qm", qm], check=False, capture_output=True, text=True
         )
         if r.returncode != 0:

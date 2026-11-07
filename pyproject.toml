@@ -5,10 +5,19 @@ line-length = 88
 extend-exclude = ["__pycache__", ".git", "tests"]
 
 [tool.ruff.lint]
-# Отключаем встроенные правила безопасности (группа S), 
-# чтобы их проверял только оригинальный Bandit. 
-# Это предотвратит дублирование ошибок.
-ignore = ["S"]
+# Базовые правила: pycodestyle (E), pyflakes (F), isort (I),
+# pyupgrade (UP), bugbear (B) + tidy-imports (TID) для запрета PyQt5.
+select = ["E", "F", "I", "UP", "B", "TID"]
+# Отключаем встроенные правила безопасности (группа S),
+# чтобы их проверял только оригинальный Bandit.
+ignore = ["S", "E501", "B007"]
+
+# Запрещаем прямые импорты PyQt5 и PyQt6.
+# В QGIS используем qgis.PyQt — это абстракция, которая работает
+# и в QGIS 3.x (PyQt5), и в QGIS 4.x (PyQt6).
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"PyQt5".msg = "Используйте qgis.PyQt вместо прямого PyQt5 (сломается в QGIS 4)"
+"PyQt6".msg = "Используйте qgis.PyQt вместо прямого PyQt6 (сломается в QGIS 3)"
 
 # Настройки безопасности Bandit
 [tool.bandit]
