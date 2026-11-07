@@ -26,7 +26,7 @@ description[zh]=将文本、Excel和空间文件中的坐标导入并校验到QG
 description[kk]=Мәтіндік, Excel және кеңістіктік файлдардан координаттарды QGIS векторлық қабаттарына импорттау және тексеру.
 
 ; --- Версия плагина ---
-version=0.16.4
+version=0.17.0
 
 ; --- Автор ---
 author=Shershavin D.
@@ -58,7 +58,7 @@ about[zh]=用于加载和预览空间数据的插件。支持文本文件 (CSV, 
 about[kk]=Кеңістіктік деректерді жүктеуге және алдын ала қарауға арналған плагин. Мәтіндік файлдарды (CSV, TXT), Excel кестелерін (XLS, XLSX, ODS) және ГИС файлдарын (SHP, GeoJSON, KML, GPKG) қолдайды. Жобаға импорттау алдында кірістірілген картада координаттарды, аудандарды және нысандар конфигурациясын визуалды тексеруге мүмкіндік береді. Координат жүйелерін, форматтарын (ондық, ГМС) автоматты түрде анықтайды және метрикаларды (аудан, периметр, ұзындық) есептейді.
 
 ; --- История версий ---
-changelog=<b>0.16.4</b><br>- Copy in preview table: whole selection via context menu and Ctrl+C (row, rectangle, Ctrl+click).<br><br><b>0.16.3</b><br>- Critical: removed QCoreApplication.installTranslator (broke QGIS 4 / Qt6 UI). Translations via isolated tr().<br>- Removed DOCTYPE from .ts (QGIS 3.28 compatibility).<br><br><b>0.16.2</b><br>- Protection against XML bombs / XXE when parsing .ts.<br><br><b>0.16.1</b><br>- Load translations directly from .ts (no lrelease).<br><br><b>0.16.0</b><br>- Localization for 8 languages (ru, en, de, fr, es, it, zh, kk).
+changelog=<b>0.17.0</b><br>- Help button in the dialog (bottom-left).<br>- Bilingual HELP (EN/RU) with HTML generation.<br><br><b>0.16.4</b><br>- Copy in preview table: whole selection via context menu and Ctrl+C (row, rectangle, Ctrl+click).<br><br><b>0.16.3</b><br>- Critical: removed QCoreApplication.installTranslator (broke QGIS 4 / Qt6 UI). Translations via isolated tr().<br>- Removed DOCTYPE from .ts (QGIS 3.28 compatibility).<br><br><b>0.16.2</b><br>- Protection against XML bombs / XXE when parsing .ts.<br><br><b>0.16.1</b><br>- Load translations directly from .ts (no lrelease).<br><br><b>0.16.0</b><br>- Localization for 8 languages (ru, en, de, fr, es, it, zh, kk).
 
 ; --- Ссылки ---
 repository=https://github.com/KybApp/kyb_import_coords.git

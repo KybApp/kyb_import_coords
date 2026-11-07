@@ -30,7 +30,7 @@ confidence-level = "medium"
 # Настройка автоматического лога изменений и версии
 [tool.commitizen]
 name = "cz_conventional_commits"
-version = "0.16.4"
+version = "0.17.0"
 version_files = ["metadata.txt:version="]
 tag_format = "v$version"
 major_version_zero = true
