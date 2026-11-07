@@ -33,8 +33,8 @@ import os
 import re
 from collections import Counter
 
-from qgis.PyQt.QtCore import QRectF, Qt
-from qgis.PyQt.QtGui import QBrush, QColor, QFont, QPainter, QPen
+from qgis.PyQt.QtCore import QEvent, QRectF, Qt
+from qgis.PyQt.QtGui import QBrush, QColor, QFont, QKeySequence, QPainter, QPen
 
 # ---------- Qt: виджеты и утилиты ----------
 from qgis.PyQt.QtWidgets import (
@@ -116,6 +116,8 @@ _QT_BTN_OK = QDialogButtonBox.StandardButton.Ok
 _QT_BTN_CANCEL = QDialogButtonBox.StandardButton.Cancel
 _QT_BTN_ROLE_RESET = QDialogButtonBox.ButtonRole.ResetRole
 _QT_ITEM_EDITABLE = Qt.ItemFlag.ItemIsEditable
+_QEVENT_MOUSE_PRESS = QEvent.Type.MouseButtonPress
+_QT_RIGHT_BUTTON = Qt.MouseButton.RightButton
 
 # ---------- QGIS-константы (scoped enums, QGIS 3.28+ / 4.x) ----------
 _QgsWkbTypesType_Point = QgsWkbTypes.Type.Point
@@ -1220,6 +1222,12 @@ class ImportDialog(QDialog):
         # пользователь нажал «Импортировать» с пустым полем.
         self._name_warn_shown = False
 
+        # Выделение в таблице до правого клика. Нужно потому что Qt
+        # при правом клике сбрасывает выделение до одной ячейки -
+        # и "Копировать" копировало только ее. Здесь сохраняем
+        # выделение до того, как Qt его сбросит.
+        self._selection_before_menu = []
+
         # Общая стилизация окна: карточки QGroupBox и жёлтые плашки.
         # Настройки отображения — цвета и размеры. Загружаются
         # из QgsSettings, могут быть изменены через диалог «⚙».
@@ -1435,9 +1443,17 @@ class ImportDialog(QDialog):
         self.preview = QTableWidget()
         self.preview.setContextMenuPolicy(_QT_CUSTOM_CONTEXT_MENU)
         self.preview.customContextMenuRequested.connect(self._on_preview_context_menu)
+
         # Ловим правку ячеек — иначе ввод в новую строку не попадал
         # в self.data_blocks и карта не перерисовывалась.
         self.preview.itemChanged.connect(self._on_preview_item_changed)
+
+        # Перехватываем правый клик до Qt, чтобы не потерять выделение.
+        self.preview.viewport().installEventFilter(self)
+
+        # Перехватываем Ctrl+C: QTableWidget по умолчанию копирует
+        # только текущую ячейку, минуя _preview_copy.
+        self.preview.installEventFilter(self)
         pb_layout.addWidget(self.preview, 1)
 
         # Карта + масштабная линейка в левом нижнем углу.
@@ -3079,6 +3095,7 @@ class ImportDialog(QDialog):
 
         self._total_area_m2 = 0.0
         self.total_area_label.setVisible(False)
+        self._selection_before_menu = []
 
         # Поле «Геометрия» возвращаем к доступному состоянию.
         try:
@@ -3103,6 +3120,7 @@ class ImportDialog(QDialog):
         self.name_warning.setVisible(False)
         self._name_warn_shown = False
         self.crs_warning.setVisible(False)
+        self._selection_before_menu = []
 
         self.preview.clear()
         self.preview.setRowCount(0)
@@ -4490,6 +4508,35 @@ class ImportDialog(QDialog):
 
         self.preview.blockSignals(False)
 
+    def eventFilter(self, obj, event):
+        """Перехватывает правый клик и Ctrl+C в таблице превью.
+
+        Правый клик: Qt сбрасывает выделение до одной ячейки — запоминаем
+        его до сброса, чтобы «Копировать» из меню взяло сохранённое.
+
+        Ctrl+C: QTableWidget по умолчанию копирует только текущую ячейку,
+        игнорируя выделение. Перехватываем клавишу и вызываем
+        _preview_copy — он работает с полным выделением.
+        """
+        # Правый клик: сохранить выделение до сброса Qt
+        if (
+            obj is self.preview.viewport()
+            and event.type() == _QEVENT_MOUSE_PRESS
+            and event.button() == _QT_RIGHT_BUTTON
+        ):
+            sel = self.preview.selectionModel()
+            if sel is not None:
+                self._selection_before_menu = list(sel.selectedIndexes())
+
+        # Ctrl+C (а также Cmd+C, Ctrl+Insert — стандартные биндинги копирования):
+        # вызвать _preview_copy вместо дефолтного копирования одной ячейки
+        if obj is self.preview and event.type() == QEvent.Type.KeyPress:
+            if event.matches(QKeySequence.StandardKey.Copy):
+                self._preview_copy()
+                return True
+
+        return super().eventFilter(obj, event)
+
     # --------------------------------------------------------
     # Контекстное меню таблицы предпросмотра
     # --------------------------------------------------------
@@ -4584,13 +4631,30 @@ class ImportDialog(QDialog):
 
         Собирает TSV-фрагмент (значения через таб, строки через
         перевод строки) — такой формат понимают Excel и LibreOffice.
+
+        Использует сохранённое выделение (см. eventFilter): правый
+        клик в Qt сбрасывает выделение до одной ячейки, поэтому
+        копируем то, что было выделено до клика.
         """
-        sel = self.preview.selectionModel().selectedIndexes()
-        if not sel:
+        sel = self.preview.selectionModel()
+        current = list(sel.selectedIndexes()) if sel is not None else []
+
+        if len(self._selection_before_menu) > len(current):
+            selected = self._selection_before_menu
+        elif current:
+            selected = current
+        else:
+            selected = self._selection_before_menu
+
+        # Сбрасываем сохранённое — следующий цикл «выделил → копировал»
+        # начнётся заново.
+        self._selection_before_menu = []
+
+        if not selected:
             return
 
-        rows = sorted({i.row() for i in sel})
-        cols = sorted({i.column() for i in sel})
+        rows = sorted({i.row() for i in selected})
+        cols = sorted({i.column() for i in selected})
 
         lines = []
         for r in rows:

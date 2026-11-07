@@ -26,7 +26,7 @@ description[zh]=将文本、Excel和空间文件中的坐标导入并校验到QG
 description[kk]=Мәтіндік, Excel және кеңістіктік файлдардан координаттарды QGIS векторлық қабаттарына импорттау және тексеру.
 
 ; --- Версия плагина ---
-version=0.16.3
+version=0.16.4
 
 ; --- Автор ---
 author=Shershavin D.
@@ -57,6 +57,9 @@ about[it]=Plugin per il caricamento e l'anteprima di dati spaziali. Supporta fil
 about[zh]=用于加载和预览空间数据的插件。支持文本文件 (CSV, TXT)、Excel 表格 (XLS, XLSX, ODS) 和 GIS 文件 (SHP, GeoJSON, KML, GPKG)。允许在导入项目之前在集成的 地图上对坐标、面积和对象配置进行可视化校验。自动检测坐标系统、格式（十进制、度分秒）并计算指标（面积、周长、长度）。
 about[kk]=Кеңістіктік деректерді жүктеуге және алдын ала қарауға арналған плагин. Мәтіндік файлдарды (CSV, TXT), Excel кестелерін (XLS, XLSX, ODS) және ГИС файлдарын (SHP, GeoJSON, KML, GPKG) қолдайды. Жобаға импорттау алдында кірістірілген картада координаттарды, аудандарды және нысандар конфигурациясын визуалды тексеруге мүмкіндік береді. Координат жүйелерін, форматтарын (ондық, ГМС) автоматты түрде анықтайды және метрикаларды (аудан, периметр, ұзындық) есептейді.
 
+; --- История версий ---
+changelog=0.16.4\n- Copy in preview table: whole selection via context menu and Ctrl+C (row, rectangle, Ctrl+click).\n\n0.16.3\n- Critical: removed QCoreApplication.installTranslator (broke QGIS 4 / Qt6 UI). Translations via isolated tr().\n- Removed DOCTYPE from .ts (QGIS 3.28 compatibility).\n\n0.16.2\n- Protection against XML bombs / XXE when parsing .ts.\n\n0.16.1\n- Load translations directly from .ts (no lrelease).\n\n0.16.0\n- Localization for 8 languages (ru, en, de, fr, es, it, zh, kk).
+
 ; --- Ссылки ---
 repository=https://github.com/KybApp/kyb_import_coords.git
 tracker=https://github.com/KybApp/kyb_import_coords/issues
@@ -71,3 +74,4 @@ license=GNU General Public License v3.0
 
 ; --- Авторские права ---
 copyright=2026, Shershavin D.
+
