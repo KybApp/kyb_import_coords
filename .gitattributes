@@ -25,3 +25,4 @@ translations_data_p4.py export-ignore
 i18n/strings_to_translate.txt export-ignore
 i18n/missing_strings.txt export-ignore
 i18n/plugin_translation.pro export-ignore
+pyproject.toml export-ignore

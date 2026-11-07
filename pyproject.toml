@@ -1,0 +1,19 @@
+# Настройки линтера Ruff
+[tool.ruff]
+line-length = 88
+# Исключаем служебные папки из проверки
+extend-exclude = ["__pycache__", ".git", "tests"]
+
+[tool.ruff.lint]
+# Отключаем встроенные правила безопасности (группа S), 
+# чтобы их проверял только оригинальный Bandit. 
+# Это предотвратит дублирование ошибок.
+ignore = ["S"]
+
+# Настройки безопасности Bandit
+[tool.bandit]
+# Исключаем служебные папки
+exclude_dirs = [".venv", "venv", "__pycache__", ".git", "tests"]
+# Уровень серьезности (medium и выше — оптимально для QGIS)
+severity-level = "medium"
+confidence-level = "medium"

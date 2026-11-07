@@ -1,7 +1,17 @@
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.17.0  # Укажите актуальную версию
+    rev: v0.17.0
     hooks:
       - id: ruff
         args: [--fix]
       - id: ruff-format
+
+  # Добавляем Bandit
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.9.4
+    hooks:
+      - id: bandit
+        # Говорим Bandit читать настройки из созданного pyproject.toml
+        args: ["-c", "pyproject.toml"]
+        # Без этой библиотеки Bandit не сможет прочитать toml-файл
+        additional_dependencies: ["bandit[toml]"]
