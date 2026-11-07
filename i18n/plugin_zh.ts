@@ -89,6 +89,10 @@
       <translation>地图：</translation>
     </message>
     <message>
+      <source>Справка</source>
+      <translation>帮助</translation>
+    </message>
+    <message>
       <source>Очистить данные</source>
       <translation>清除数据</translation>
     </message>

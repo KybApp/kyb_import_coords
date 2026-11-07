@@ -89,6 +89,10 @@
       <translation>Karte:</translation>
     </message>
     <message>
+      <source>Справка</source>
+      <translation>Hilfe</translation>
+    </message>
+    <message>
       <source>Очистить данные</source>
       <translation>Daten löschen</translation>
     </message>

@@ -89,6 +89,10 @@
       <translation>Mapa:</translation>
     </message>
     <message>
+      <source>Справка</source>
+      <translation>Ayuda</translation>
+    </message>
+    <message>
       <source>Очистить данные</source>
       <translation>Limpiar datos</translation>
     </message>

@@ -550,6 +550,15 @@ TRANSLATIONS = {
         "zh": "已添加图层：{count}",
         "kk": "Қосылған қабаттар: {count}",
     },
+    "Справка": {
+        "en": "Help",
+        "de": "Hilfe",
+        "fr": "Aide",
+        "es": "Ayuda",
+        "it": "Aiuto",
+        "zh": "帮助",
+        "kk": "Анықтама",
+    },
     # --- plugin.py ---
     "Импорт и проверка пространственных данных": {
         "en": "Import and validate spatial data",

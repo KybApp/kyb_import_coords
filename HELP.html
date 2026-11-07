@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        body { font-family: sans-serif; line-height: 1.5; padding: 20px; max-width: 900px; }
+        table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
+        th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+        th { background-color: #f4f4f4; }
+        code { background-color: #f4f4f4; padding: 2px 4px; border-radius: 3px; }
+    </style>
+</head>
+<body>
+<h1>Import Data — Detailed Help</h1>
+<p><strong>Language / Язык:</strong> <a href="HELP.html">English</a> | <a href="HELP_ru.html">Русский</a></p>
+<p>Full description of all plugin features. If you are launching
+it for the first time — start with the "Quick start" section.</p>
+<hr />
+<h2>1. Quick start</h2>
+<ol>
+<li>Open the plugin: <strong>Plugins → Import data</strong> (or the button on the <code>KYB_TOOLS</code> toolbar).</li>
+<li>Load data in one of three ways:</li>
+<li><strong>File</strong> → click «...» and select a file;</li>
+<li><strong>From clipboard</strong> → copy text and click the button;</li>
+<li><strong>Drag &amp; drop</strong> the file directly into the plugin window.</li>
+<li>Look at the table and map. If something is wrong —
+   adjust the settings.</li>
+<li>Enter a layer name (required).</li>
+<li>Click <strong>«Import»</strong>.</li>
+</ol>
+<p>Nothing is added to the QGIS project until «Import» is clicked.
+This is intentional: check first, import later.</p>
+<hr />
+<h2>2. Plugin window</h2>
+<p>Left side — preview: data table on top, map below.
+Right side — settings blocks:</p>
+<ul>
+<li><strong>Data source</strong> — file and source CRS.</li>
+<li><strong>Structure</strong> — parsing parameters, coordinate format and precision (⚙ button), vertex numbering.</li>
+<li><strong>Geometry</strong> — feature type, style, auxiliary layers, display settings (⚙ button).</li>
+<li><strong>Result</strong> — layer name and saving to GeoPackage.</li>
+</ul>
+<p>At the bottom — <strong>Clear data</strong>, <strong>Import</strong>, <strong>Cancel</strong> buttons.</p>
+<hr />
+<h2>3. Data source</h2>
+<h3>"File" field</h3>
+<p>Path to the loaded file. Drag &amp; drop supported.</p>
+<h3>«...» button</h3>
+<p>Standard file picker. Filter offers:</p>
+<ul>
+<li>all supported;</li>
+<li>text only;</li>
+<li>Excel only;</li>
+<li>spatial only;</li>
+<li>any file.</li>
+</ul>
+<h3>«From clipboard» button</h3>
+<p>Takes text from the system clipboard. Useful when data is
+copied from Excel, a browser, or another document.</p>
+<h3>Source CRS</h3>
+<p>Coordinate system of the input data. Selected via the standard
+QGIS dialog. Supported:</p>
+<ul>
+<li>standard EPSG;</li>
+<li>custom CRS added via <strong>Settings → Custom CRS</strong> (shown as <code>USER:xxxxx</code>).</li>
+</ul>
+<p><strong>CRS validation.</strong> When «Import» is clicked, the plugin checks:</p>
+<ol>
+<li>The CRS is recognized by QGIS. If not — import is blocked,
+   the CRS block is highlighted in red.</li>
+<li>Data units match the CRS type: meters — projected,
+   degrees — geographic. If not — a warning asks «continue?».</li>
+</ol>
+<p>On unit mismatch, a yellow warning appears in the "Data source"
+block — visible right after loading data.</p>
+<hr />
+<h2>4. Structure</h2>
+<h3>Format</h3>
+<p>Detected automatically:</p>
+<ul>
+<li><strong>Decimal</strong> — <code>55.7244    36.3638</code>;</li>
+<li><strong>DMS in one column</strong> — <code>55°43'28.05"</code>;</li>
+<li><strong>DMS in three columns</strong> — <code>55    43  28.05   36  21  49.94</code>.</li>
+</ul>
+<h3>Headers</h3>
+<p>Detected by content: if the first row contains noticeably fewer
+numbers than the data — it is treated as a header.</p>
+<h3>Start/End row</h3>
+<p>Allow cutting a header or tail of the file. <code>End row = 0</code>
+means "to the end".</p>
+<h3>Encoding and Delimiter</h3>
+<p><code>UTF-8</code>, <code>CP1251</code>, <code>UTF-16</code>. Default is UTF-8.
+Delimiter: <code>auto</code> (default), <code>tab</code>, <code>comma</code>, <code>semicolon</code>, <code>space</code>.</p>
+<p>Auto mode picks the most stable delimiter from the first 15 rows.
+If the manually selected delimiter does not fit and data cannot be
+recognized as coordinates, the plugin suggests switching to a suitable one.</p>
+<h3>Order / Axes</h3>
+<p>Only one of the two toggles is shown:</p>
+<ul>
+<li><strong>Order: Latitude, Longitude / Longitude, Latitude</strong> — for degrees;</li>
+<li><strong>Axes: North, East / East, North</strong> — for meters.</li>
+</ul>
+<p>Default — North, East for meters and Latitude, Longitude
+for degrees. This matches the geodetic axis order in MSK,
+GSK-2011 and SK-42.</p>
+<h3>Coordinate fields</h3>
+<p>Field labels change automatically:</p>
+<ul>
+<li>for meters — <strong>North:</strong> / <strong>East:</strong></li>
+<li>for degrees — <strong>Latitude:</strong> / <strong>Longitude:</strong>.</li>
+</ul>
+<p>Number of fields depends on format:</p>
+<ul>
+<li>Decimal — 2;</li>
+<li>DMS in one column — 2;</li>
+<li>DMS in three columns — 6.</li>
+</ul>
+<h3>Vertex numbering</h3>
+<p>Controls how vertices are numbered in the layer (and in the preview table):</p>
+<ul>
+<li><strong>Auto (per feature)</strong> — for each polygon/line numbering starts at 1.</li>
+<li><strong>Auto (continuous)</strong> — numbering 1, 2, 3... goes continuously across all features.</li>
+<li><strong>From column</strong> — numbers are taken from the selected source column. If the column has empty values or is not selected, a yellow warning asks to pick another option.</li>
+</ul>
+<h3>«⚙» button (Format &amp; precision)</h3>
+<p>Opens a dialog for coordinate display settings:
+- <strong>Latitude/Longitude:</strong> <code>Decimal</code> or <code>DMS</code> (degrees-minutes-seconds).
+- <strong>Decimal places:</strong> separately for degrees, seconds and meters.</p>
+<hr />
+<h2>5. Geometry</h2>
+<h3>Geometry type</h3>
+<ul>
+<li><strong>Point</strong> — each row is a separate point.</li>
+<li><strong>Line</strong> — one block is one line.</li>
+<li><strong>Polygon</strong> — block is split into sub-polygons by repeating the first point.</li>
+<li><strong>Multipolygon</strong> — same as polygon, but all contours are stored in one feature.</li>
+</ul>
+<p><strong>An empty row</strong> between blocks is always a boundary of a new feature.</p>
+<p>For spatial files the type is detected automatically and cannot be changed — the data already is what it is.</p>
+<h3>Polygon style</h3>
+<ul>
+<li><strong>Outline</strong> — border only.</li>
+<li><strong>Fill</strong> — fill only.</li>
+<li><strong>Outline + fill</strong> — both.</li>
+</ul>
+<h3>Vertices at corners and Numbering</h3>
+<p>Create a separate layer with vertices and labels.</p>
+<h3>«⚙» button (Display)</h3>
+<p>Opens a dialog for map object colors/sizes and labels. See section 8 for details.</p>
+<hr />
+<h2>6. Result</h2>
+<h3>Layer name</h3>
+<p>Required field. If empty — on «Import» click a yellow warning appears
+under the field and a red border. As soon as you start typing — the highlight goes away.</p>
+<p>For a spatial file the output may be several layers: <code>&lt;name&gt; — points</code>, <code>&lt;name&gt; — lines</code>, <code>&lt;name&gt; — polygons</code>.</p>
+<h3>Save to file (GeoPackage)</h3>
+<p>If enabled — the result is written to <code>.gpkg</code>, and the layer loaded from
+the file (not a temporary one) is added to the project.</p>
+<h3>Vertex layer</h3>
+<p>If «Vertices at corners» or «Numbering» is enabled, a second layer
+<code>&lt;name&gt; — vertices</code> is created. Fields: <code>num</code>, <code>vertex</code>.</p>
+<hr />
+<h2>7. Preview table</h2>
+<p>One row — one vertex (for points — the point itself).</p>
+<h3>Unified table view</h3>
+<p>The table view does not depend on the source (text, Excel or spatial).
+Source columns (if any) are shown on the left, computed columns on the right:</p>
+<table>
+<thead>
+<tr>
+<th>col1</th>
+<th>col2</th>
+<th>→ No.</th>
+<th>→ Vert. No.</th>
+<th>→ Type</th>
+<th>→ Coord1</th>
+<th>→ Coord2</th>
+<th>→ Area m²</th>
+<th>→ Area ha</th>
+<th>→ Perimeter/length m</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>...</td>
+<td>...</td>
+<td>1</td>
+<td>1</td>
+<td>Line</td>
+<td>55.67</td>
+<td>36.38</td>
+<td></td>
+<td></td>
+<td>1456.26</td>
+</tr>
+</tbody>
+</table>
+<p>Area and length are filled <strong>only in the first row of a feature</strong>.
+Other vertices — coordinates only.</p>
+<h3>Vertex limit</h3>
+<p>For each feature no more than 80 vertices are shown. If there are more,
+instead of the rest a gray row <code>... vertices hidden: N ...</code> is shown.
+This lets you see all features even if one of them is very long.</p>
+<h3>Context menu (right click)</h3>
+<ul>
+<li><strong>Copy</strong> — selected cells to clipboard as TSV (pastes into Excel);</li>
+<li><strong>Add row</strong> — empty row after the current one;</li>
+<li><strong>Delete row</strong> — remove the current row.</li>
+</ul>
+<p>Row edits are applied to the data and immediately reflected on the map.</p>
+<p><strong>Ctrl+C</strong> copies the whole current selection (row, rectangle, Ctrl+click multi-select) — same as the menu item.</p>
+<hr />
+<h2>8. «⚙» settings (two dialogs)</h2>
+<p>The plugin has two gears for different things.</p>
+<h3>In the "Structure" block (Format &amp; precision)</h3>
+<p>Lets you choose:
+- Coordinate format: <code>Decimal</code> or <code>DMS</code>;
+- Degree precision (decimal places);
+- Second precision (for DMS);
+- Meter precision.</p>
+<p>Changes are applied to the table immediately after «OK».
+Rounding is visual only — full values go into the layer.</p>
+<h3>In the "Geometry" block (Display)</h3>
+<p>Lets you set:
+- Point color and size;
+- Line color and width;
+- Polygon outline color, width and fill color;
+- Number and area label color and size.</p>
+<p>The «Reset» button returns default settings (blue points, green lines,
+red outline, pink fill). Settings are saved in QgsSettings.</p>
+<hr />
+<h2>9. Preview map</h2>
+<h3>What you see</h3>
+<ul>
+<li>Feature geometry — colored by current settings.</li>
+<li>Vertex number labels (if enabled).</li>
+<li>Area labels (for polygons) — shown as <code>S₁=21237.18 m²</code>.</li>
+<li>Total area in the top-left corner (for polygons).</li>
+<li>Scale bar in the bottom-left corner.</li>
+</ul>
+<hr />
+<h2>10. Area and length calculation</h2>
+<h3>Units</h3>
+<ul>
+<li>Area — m² and ha.</li>
+<li>Length — meters.</li>
+</ul>
+<h3>How it's calculated</h3>
+<p><strong>For projected CRS</strong> (MSK, GSK-2011, SK-42, UTM): standard QGIS formulas.</p>
+<p><strong>For geographic CRS</strong> (EPSG:4326, WGS84): via Web Mercator. We compute
+meters per degree of longitude at the centroid latitude of the feature.
+The approximation is valid for features up to a few kilometers.</p>
+<h3>Precision</h3>
+<ul>
+<li>Area in m² — 2 decimals.</li>
+<li>Area in ha — 4 decimals.</li>
+<li>Perimeter and length in m — 2 decimals.</li>
+</ul>
+<hr />
+<h2>11. Excel and spatial files</h2>
+<h3>Excel (<code>.xls</code>, <code>.xlsx</code>, <code>.ods</code>)</h3>
+<p>Read via GDAL/OGR — built into QGIS. No external libraries required.
+- The first non-empty sheet is taken.
+- The first row is treated as a header.
+- Limitation: if the file has <strong>no headers</strong>, the first data row will be lost. Save the file as <code>.csv</code> and load it as text.</p>
+<h3>Spatial files</h3>
+<p>Read via GDAL/OGR.
+- <strong>Shapefile</strong> (<code>.shp</code>, <code>.dbf</code>, <code>.shx</code>, <code>.prj</code>);
+- <strong>GeoJSON</strong> (<code>.geojson</code>, <code>.json</code>);
+- <strong>KML</strong> (<code>.kml</code>);
+- <strong>GeoPackage</strong> (<code>.gpkg</code>).</p>
+<p><strong>Attributes are transferred</strong> from the source file. If the shapefile had
+fields <code>name</code>, <code>type</code> — they will be in the resulting layer along with our
+<code>num</code>, <code>area_m2</code>, etc.</p>
+<p><strong>Mixed types.</strong> If a single KML has points, lines, and polygons — the plugin
+splits them into three layers on output.</p>
+<hr />
+<h2>12. Saving and loading settings</h2>
+<p>What is remembered between sessions:
+- delimiter and encoding;
+- source CRS and geometry type;
+- axis order and vertex numbering;
+- display settings, coordinate format and precision;
+- GeoPackage save path.</p>
+<p>Stored in QgsSettings under the <code>KYB_import_coords/</code> prefix.</p>
+<hr />
+<h2>13. «Clear data» button</h2>
+<p>Fully resets the current state (file field, data, table, map and spatial mode).
+Fields return to visible state. Settings (delimiter, CRS, colors) are <strong>not</strong> reset.</p>
+<p>When loading a new source, clearing happens <strong>automatically</strong> before loading.</p>
+<hr />
+<h2>14. FAQ</h2>
+<p><strong>The plugin does not appear in the menu.</strong>
+Check the path: inside the <code>KYB_import_coords</code> folder there must be files
+<code>__init__.py</code>, <code>plugin.py</code>, etc. If there is another nested folder inside —
+move the files one level up. Restart QGIS.</p>
+<p><strong>File does not load — "Not coordinate-like".</strong>
+Reasons: wrong delimiter, wrong encoding, text instead of numbers in data.
+The plugin may suggest another delimiter — accept it if so.</p>
+<p><strong>"Could not read Excel".</strong>
+The file is password-protected or damaged. Open in Excel and save as <code>.csv</code>.</p>
+<p><strong>"Invalid CRS" error.</strong>
+A CRS is selected that QGIS does not have. Open the list, pick a standard one,
+or add your own via <strong>Settings → Custom CRS</strong>.</p>
+<p><strong>"Data is not consistent with CRS" warning.</strong>
+Data in meters but CRS is geographic (or vice versa). Most likely, the wrong
+CRS is selected.</p>
+<p><strong>Feature disappeared from the table.</strong>
+Make sure the feature has vertices. If a feature has more than 80 vertices, it
+is truncated by a <code>... vertices hidden: N ...</code> row (the feature itself is fully
+displayed on the map).</p>
+<p><strong>Area labels overlap the contour.</strong>
+Not fixed yet. The label is placed at the contour centroid. For complex polygons
+it may fall on an edge.</p>
+</body>
+</html>

@@ -1,345 +1,370 @@
-# Импорт данных — подробная справка
+# Import Data — Detailed Help
 
-Полное описание всех возможностей плагина. Если вы
-запускаете его впервые — начните с раздела «Быстрый старт».
+**Language / Язык:** [English](HELP.html) | [Русский](HELP_ru.html)
 
----
-
-## 1. Быстрый старт
-
-1. Откройте плагин: **Плагины → Импорт данных** (или кнопка на панели `KYB_TOOLS`).
-2. Загрузите данные одним из трёх способов:
-   - **Файл** → нажмите «...» и выберите файл;
-   - **Из буфера** → скопируйте текст и нажмите кнопку;
-   - **Перетащите** файл прямо в окно плагина.
-3. Посмотрите на таблицу и карту. Если что-то не так —
-   поправьте настройки.
-4. Введите имя слоя (обязательно).
-5. Нажмите **«Импортировать»**.
-
-Пока не нажата кнопка «Импортировать», в проект QGIS ничего
-не добавляется. Это сделано специально: сначала проверяем,
-потом импортируем.
+Full description of all plugin features. If you are launching
+it for the first time — start with the "Quick start" section.
 
 ---
 
-## 2. Окно плагина
+## 1. Quick start
 
-Слева — предпросмотр: таблица данных сверху, карта снизу.
-Справа — блоки настроек:
+1. Open the plugin: **Plugins → Import data** (or the button on the `KYB_TOOLS` toolbar).
+2. Load data in one of three ways:
+   - **File** → click «...» and select a file;
+   - **From clipboard** → copy text and click the button;
+   - **Drag & drop** the file directly into the plugin window.
+3. Look at the table and map. If something is wrong —
+   adjust the settings.
+4. Enter a layer name (required).
+5. Click **«Import»**.
 
-- **Источник данных** — файл и исходная система координат.
-- **Структура** — параметры разбора, формат и точность координат (кнопка ⚙), нумерация вершин.
-- **Геометрия** — тип объектов, стиль, вспомогательные слои, настройки отображения (кнопка ⚙).
-- **Результат** — имя слоя и сохранение в GeoPackage.
-
-Внизу — кнопки **Очистить данные**, **Импортировать**, **Отмена**.
-
----
-
-## 3. Источник данных
-
-### Поле «Файл»
-
-Путь к загруженному файлу. Поддерживается перетаскивание (drag&drop).
-
-### Кнопка «...»
-
-Стандартный диалог выбора. Фильтр предлагает:
-
-- всё поддерживаемое;
-- только текстовые;
-- только Excel;
-- только пространственные;
-- любые файлы.
-
-### Кнопка «Из буфера»
-
-Берёт текст из системного буфера обмена. Удобно, если данные
-скопированы из Excel, браузера или другого документа.
-
-### Исходная СК
-
-Система координат исходных данных. Выбирается из стандартного
-диалога QGIS. Поддерживаются:
-
-- стандартные EPSG;
-- пользовательские СК, добавленные через
-  **Настройки → Свои СК** (они показываются как `USER:xxxxx`).
-
-**Проверка СК.** При нажатии «Импортировать» плагин проверяет:
-
-1. СК распознаётся QGIS. Если нет — импорт блокируется,
-   блок СК подсвечивается красным.
-2. Единицы данных совпадают с типом СК: метры — проекционная,
-   градусы — географическая. Если нет — предупреждение с
-   вопросом «продолжить?».
-
-При несовпадении единиц в блоке «Источник данных» появляется
-жёлтая плашка — она видна сразу после загрузки данных.
+Nothing is added to the QGIS project until «Import» is clicked.
+This is intentional: check first, import later.
 
 ---
 
-## 4. Структура
+## 2. Plugin window
 
-### Формат
+Left side — preview: data table on top, map below.
+Right side — settings blocks:
 
-Определяется автоматически:
+- **Data source** — file and source CRS.
+- **Structure** — parsing parameters, coordinate format and precision (⚙ button), vertex numbering.
+- **Geometry** — feature type, style, auxiliary layers, display settings (⚙ button).
+- **Result** — layer name and saving to GeoPackage.
 
-- **Десятичные** — `55.7244	36.3638`;
-- **ГМС в одной колонке** — `55°43'28.05"`;
-- **ГМС в трёх колонках** — `55	43	28.05	36	21	49.94`.
-
-### Заголовки
-
-Определяются по содержимому: если в первой строке чисел
-заметно меньше, чем в данных — считаем её заголовком.
-
-### Нач./Кон. строка
-
-Позволяют отрезать шапку или хвост файла. `Кон. строка = 0`
-означает «до конца».
-
-### Кодировка и Разделитель
-
-`UTF-8`, `CP1251`, `UTF-16`. По умолчанию UTF-8.
-Разделитель: `авто` (по умолчанию), `таб`, `запятая`, `точка с запятой`, `пробел`. 
-
-Авторежим выбирает самый стабильный разделитель по первым 15 строкам. 
-Если выбранный вручную разделитель не подходит и данные не распознаются как координаты, плагин предложит переключиться на подходящий.
-
-### Порядок / Оси
-
-Показывается один из двух переключателей:
-
-- **Порядок: Широта, Долгота / Долгота, Широта** — для градусов;
-- **Оси: Север, Восток / Восток, Север** — для метров.
-
-По умолчанию — Север, Восток для метров и Широта, Долгота
-для градусов. Это соответствует геодезическому порядку осей
-в МСК, ГСК-2011 и СК-42.
-
-### Поля координат
-
-Подписи полей меняются автоматически:
-
-- для метров — **Север:** / **Восток:**
-- для градусов — **Широта:** / **Долгота:**.
-
-Количество полей зависит от формата:
-
-- Десятичные — 2;
-- ГМС в одной колонке — 2;
-- ГМС в трёх колонках — 6.
-
-### Нумерация вершин
-
-Позволяет управлять тем, как нумеруются вершины в слое (и в таблице предпросмотра):
-
-- **Авто (по объектам)** — для каждого полигона/линии нумерация начинается с 1.
-- **Авто (сквозная)** — нумерация 1, 2, 3... идёт непрерывно через все объекты.
-- **Из колонки** — номера берутся из выбранной колонки исходных данных. Если в колонке есть пустые значения или она не указана, появится жёлтая плашка с просьбой выбрать другой вариант.
-
-### Кнопка «⚙» (Формат и точность)
-
-Открывает диалог настройки отображения координат:
-- **Широта/Долгота:** `Десятичные` или `ГГММСС` (градусы-минуты-секунды).
-- **Знаков после запятой:** отдельно для градусов, секунд и метров.
+At the bottom — **Clear data**, **Import**, **Cancel** buttons.
 
 ---
 
-## 5. Геометрия
+## 3. Data source
 
-### Тип геометрии
+### "File" field
 
-- **Точка** — каждая строка = отдельная точка.
-- **Линия** — один блок = одна линия.
-- **Полигон** — блок делится на подполигоны по повтору первой точки.
-- **Многоконтурный полигон** — как полигон, но все контуры хранятся в одном объекте.
+Path to the loaded file. Drag & drop supported.
 
-**Пустая строка** между блоками — всегда граница нового объекта.
+### «...» button
 
-Для пространственных файлов тип определяется автоматически и не может быть изменён — данные уже такие.
+Standard file picker. Filter offers:
 
-### Стиль полигона
+- all supported;
+- text only;
+- Excel only;
+- spatial only;
+- any file.
 
-- **Контур** — только граница.
-- **Заливка** — только заливка.
-- **Контур + заливка** — и то, и другое.
+### «From clipboard» button
 
-### Точки по углам и Нумерация
+Takes text from the system clipboard. Useful when data is
+copied from Excel, a browser, or another document.
 
-Создают отдельный слой с вершинами и подписями.
+### Source CRS
 
-### Кнопка «⚙» (Отображение)
+Coordinate system of the input data. Selected via the standard
+QGIS dialog. Supported:
 
-Открывает диалог настройки цветов и размеров объектов на карте и подписей. Подробнее — раздел 8.
+- standard EPSG;
+- custom CRS added via **Settings → Custom CRS** (shown as `USER:xxxxx`).
 
----
+**CRS validation.** When «Import» is clicked, the plugin checks:
 
-## 6. Результат
+1. The CRS is recognized by QGIS. If not — import is blocked,
+   the CRS block is highlighted in red.
+2. Data units match the CRS type: meters — projected,
+   degrees — geographic. If not — a warning asks «continue?».
 
-### Имя слоя
-
-Обязательное поле. Если пусто — при нажатии «Импортировать» появится жёлтая плашка под полем и красная рамка. Как только начинаете вводить — подсветка уходит.
-
-Для пространственного файла на выходе может получиться несколько слоёв: `<имя> — точки`, `<имя> — линии`, `<имя> — полигоны`.
-
-### Сохранить в файл (GeoPackage)
-
-Если включено — результат пишется в `.gpkg`, и в проект добавляется загруженный из файла слой, а не временный.
-
-### Слой вершин
-
-Если включены «Точки по углам» или «Нумерация», создаётся второй слой `<имя> — вершины`. Поля: `num`, `vertex`.
+On unit mismatch, a yellow warning appears in the "Data source"
+block — visible right after loading data.
 
 ---
 
-## 7. Таблица предпросмотра
+## 4. Structure
 
-Одна строка — одна вершина (для точек — сама точка).
+### Format
 
-### Единый вид таблицы
+Detected automatically:
 
-Вид таблицы не зависит от источника (текст, Excel или spatial). Слева показываются исходные колонки (если они есть), справа — вычисляемые:
+- **Decimal** — `55.7244	36.3638`;
+- **DMS in one column** — `55°43'28.05"`;
+- **DMS in three columns** — `55	43	28.05	36	21	49.94`.
 
-| col1 | col2 | → № | → №верш | → Тип | → Коорд1 | → Коорд2 | → Площадь м² | → Площадь га | → Периметр/длина м |
+### Headers
+
+Detected by content: if the first row contains noticeably fewer
+numbers than the data — it is treated as a header.
+
+### Start/End row
+
+Allow cutting a header or tail of the file. `End row = 0`
+means "to the end".
+
+### Encoding and Delimiter
+
+`UTF-8`, `CP1251`, `UTF-16`. Default is UTF-8.
+Delimiter: `auto` (default), `tab`, `comma`, `semicolon`, `space`.
+
+Auto mode picks the most stable delimiter from the first 15 rows.
+If the manually selected delimiter does not fit and data cannot be
+recognized as coordinates, the plugin suggests switching to a suitable one.
+
+### Order / Axes
+
+Only one of the two toggles is shown:
+
+- **Order: Latitude, Longitude / Longitude, Latitude** — for degrees;
+- **Axes: North, East / East, North** — for meters.
+
+Default — North, East for meters and Latitude, Longitude
+for degrees. This matches the geodetic axis order in MSK,
+GSK-2011 and SK-42.
+
+### Coordinate fields
+
+Field labels change automatically:
+
+- for meters — **North:** / **East:**
+- for degrees — **Latitude:** / **Longitude:**.
+
+Number of fields depends on format:
+
+- Decimal — 2;
+- DMS in one column — 2;
+- DMS in three columns — 6.
+
+### Vertex numbering
+
+Controls how vertices are numbered in the layer (and in the preview table):
+
+- **Auto (per feature)** — for each polygon/line numbering starts at 1.
+- **Auto (continuous)** — numbering 1, 2, 3... goes continuously across all features.
+- **From column** — numbers are taken from the selected source column. If the column has empty values or is not selected, a yellow warning asks to pick another option.
+
+### «⚙» button (Format & precision)
+
+Opens a dialog for coordinate display settings:
+- **Latitude/Longitude:** `Decimal` or `DMS` (degrees-minutes-seconds).
+- **Decimal places:** separately for degrees, seconds and meters.
+
+---
+
+## 5. Geometry
+
+### Geometry type
+
+- **Point** — each row is a separate point.
+- **Line** — one block is one line.
+- **Polygon** — block is split into sub-polygons by repeating the first point.
+- **Multipolygon** — same as polygon, but all contours are stored in one feature.
+
+**An empty row** between blocks is always a boundary of a new feature.
+
+For spatial files the type is detected automatically and cannot be changed — the data already is what it is.
+
+### Polygon style
+
+- **Outline** — border only.
+- **Fill** — fill only.
+- **Outline + fill** — both.
+
+### Vertices at corners and Numbering
+
+Create a separate layer with vertices and labels.
+
+### «⚙» button (Display)
+
+Opens a dialog for map object colors/sizes and labels. See section 8 for details.
+
+---
+
+## 6. Result
+
+### Layer name
+
+Required field. If empty — on «Import» click a yellow warning appears
+under the field and a red border. As soon as you start typing — the highlight goes away.
+
+For a spatial file the output may be several layers: `<name> — points`, `<name> — lines`, `<name> — polygons`.
+
+### Save to file (GeoPackage)
+
+If enabled — the result is written to `.gpkg`, and the layer loaded from
+the file (not a temporary one) is added to the project.
+
+### Vertex layer
+
+If «Vertices at corners» or «Numbering» is enabled, a second layer
+`<name> — vertices` is created. Fields: `num`, `vertex`.
+
+---
+
+## 7. Preview table
+
+One row — one vertex (for points — the point itself).
+
+### Unified table view
+
+The table view does not depend on the source (text, Excel or spatial).
+Source columns (if any) are shown on the left, computed columns on the right:
+
+| col1 | col2 | → No. | → Vert. No. | → Type | → Coord1 | → Coord2 | → Area m² | → Area ha | → Perimeter/length m |
 |---|---|---|---|---|---|---|---|---|---|
-| ... | ... | 1 | 1 | Линия | 55.67 | 36.38 | | | 1456.26 |
+| ... | ... | 1 | 1 | Line | 55.67 | 36.38 | | | 1456.26 |
 
-Площадь и длина заполнены **только в первой строке объекта**. Остальные вершины — только координаты.
+Area and length are filled **only in the first row of a feature**.
+Other vertices — coordinates only.
 
-### Ограничение по вершинам
+### Vertex limit
 
-Для каждого объекта показывается не более 80 вершин. Если вершин больше, вместо остальных выводится серая строка `... скрыто вершин: N ...`. Это позволяет увидеть все объекты, даже если один из них очень длинный.
+For each feature no more than 80 vertices are shown. If there are more,
+instead of the rest a gray row `... vertices hidden: N ...` is shown.
+This lets you see all features even if one of them is very long.
 
-### Контекстное меню (правый клик)
+### Context menu (right click)
 
-- **Копировать** — выделенные ячейки в буфер как TSV (вставляется в Excel);
-- **Добавить строку** — пустая строка после текущей;
-- **Удалить строку** — убрать текущую строку.
+- **Copy** — selected cells to clipboard as TSV (pastes into Excel);
+- **Add row** — empty row after the current one;
+- **Delete row** — remove the current row.
 
-Правки строк применяются к данным и сразу отражаются на карте.
+Row edits are applied to the data and immediately reflected on the map.
 
----
-
-## 8. Настройки «⚙» (два диалога)
-
-В плагине две шестерёнки, отвечающие за разные вещи.
-
-### В блоке «Структура» (Формат и точность)
-
-Позволяет выбрать:
-- Формат координат: `Десятичные` или `ГГММСС`;
-- Точность градусов (знаков после запятой);
-- Точность секунд (для ГГММСС);
-- Точность метров.
-
-Изменения применяются к таблице сразу после нажатия «OK». Округление только визуальное — в слой уходят полные значения.
-
-### В блоке «Геометрия» (Отображение)
-
-Позволяет настроить:
-- Цвет и размер точек;
-- Цвет и толщину линий;
-- Цвет контура, толщину и цвет заливки полигонов;
-- Цвет и размер номеров и площадей.
-
-Кнопка «Сбросить» возвращает дефолтные настройки (синие точки, зелёные линии, красный контур, розовая заливка). Настройки сохраняются в QgsSettings.
+**Ctrl+C** copies the whole current selection (row, rectangle, Ctrl+click multi-select) — same as the menu item.
 
 ---
 
-## 9. Карта предпросмотра
+## 8. «⚙» settings (two dialogs)
 
-### Что видно
+The plugin has two gears for different things.
 
-- Геометрия объектов — цветом по текущим настройкам.
-- Подписи номеров вершин (если включено).
-- Подписи площадей (для полигонов) — вид `S₁=21237.18 м²`.
-- Общая площадь в левом верхнем углу (для полигонов).
-- Масштабная линейка в левом нижнем углу.
+### In the "Structure" block (Format & precision)
 
----
+Lets you choose:
+- Coordinate format: `Decimal` or `DMS`;
+- Degree precision (decimal places);
+- Second precision (for DMS);
+- Meter precision.
 
-## 10. Расчёт площадей и длин
+Changes are applied to the table immediately after «OK».
+Rounding is visual only — full values go into the layer.
 
-### Единицы
-- Площадь — м² и га.
-- Длина — метры.
+### In the "Geometry" block (Display)
 
-### Как считаются
-**Для проекционных СК** (МСК, ГСК-2011, СК-42, UTM): стандартные формулы QGIS.
+Lets you set:
+- Point color and size;
+- Line color and width;
+- Polygon outline color, width and fill color;
+- Number and area label color and size.
 
-**Для географических СК** (EPSG:4326, WGS84): через Web Mercator. Считаем метры на градус долготы на широте центроида объекта. Приближение верно для объектов до нескольких километров.
-
-### Точность
-- Площадь в м² — 2 знака.
-- Площадь в га — 4 знака.
-- Периметр и длина в м — 2 знака.
+The «Reset» button returns default settings (blue points, green lines,
+red outline, pink fill). Settings are saved in QgsSettings.
 
 ---
 
-## 11. Excel и пространственные файлы
+## 9. Preview map
+
+### What you see
+
+- Feature geometry — colored by current settings.
+- Vertex number labels (if enabled).
+- Area labels (for polygons) — shown as `S₁=21237.18 m²`.
+- Total area in the top-left corner (for polygons).
+- Scale bar in the bottom-left corner.
+
+---
+
+## 10. Area and length calculation
+
+### Units
+- Area — m² and ha.
+- Length — meters.
+
+### How it's calculated
+**For projected CRS** (MSK, GSK-2011, SK-42, UTM): standard QGIS formulas.
+
+**For geographic CRS** (EPSG:4326, WGS84): via Web Mercator. We compute
+meters per degree of longitude at the centroid latitude of the feature.
+The approximation is valid for features up to a few kilometers.
+
+### Precision
+- Area in m² — 2 decimals.
+- Area in ha — 4 decimals.
+- Perimeter and length in m — 2 decimals.
+
+---
+
+## 11. Excel and spatial files
 
 ### Excel (`.xls`, `.xlsx`, `.ods`)
-Читается через GDAL/OGR — встроенный в QGIS. Внешние библиотеки не требуются.
-- Берётся первый непустой лист.
-- Первая строка трактуется как заголовки.
-- Ограничение: если в файле **нет заголовков**, первая строка данных потеряется. Сохраните файл в `.csv` и загрузите как текст.
+Read via GDAL/OGR — built into QGIS. No external libraries required.
+- The first non-empty sheet is taken.
+- The first row is treated as a header.
+- Limitation: if the file has **no headers**, the first data row will be lost. Save the file as `.csv` and load it as text.
 
-### Пространственные файлы
-Читаются через GDAL/OGR.
+### Spatial files
+Read via GDAL/OGR.
 - **Shapefile** (`.shp`, `.dbf`, `.shx`, `.prj`);
 - **GeoJSON** (`.geojson`, `.json`);
 - **KML** (`.kml`);
 - **GeoPackage** (`.gpkg`).
 
-**Атрибуты переносятся** из исходного файла. Если в шейпе были поля `name`, `type` — они попадут в итоговый слой вместе с нашими `num`, `area_m2` и т.д.
+**Attributes are transferred** from the source file. If the shapefile had
+fields `name`, `type` — they will be in the resulting layer along with our
+`num`, `area_m2`, etc.
 
-**Смешанные типы.** Если в одном KML есть и точки, и линии, и полигоны — плагин разбивает их на три слоя на выходе.
-
----
-
-## 12. Сохранение и загрузка настроек
-
-Что запоминается между запусками:
-- разделитель и кодировка;
-- исходная СК и тип геометрии;
-- порядок осей и нумерация вершин;
-- настройки отображения, формат координат и точности;
-- путь сохранения в GeoPackage.
-
-Хранится в QgsSettings под префиксом `KYB_import_coords/`.
+**Mixed types.** If a single KML has points, lines, and polygons — the plugin
+splits them into three layers on output.
 
 ---
 
-## 13. Кнопка «Очистить данные»
+## 12. Saving and loading settings
 
-Полностью сбрасывает текущее состояние (поле файла, данные, таблицу, карту и spatial-режим). Поля возвращаются к видимому состоянию. Настройки (разделитель, СК, цвета) **не сбрасываются**.
+What is remembered between sessions:
+- delimiter and encoding;
+- source CRS and geometry type;
+- axis order and vertex numbering;
+- display settings, coordinate format and precision;
+- GeoPackage save path.
 
-Если загружаешь новый источник, очистка происходит **автоматически** перед загрузкой.
+Stored in QgsSettings under the `KYB_import_coords/` prefix.
 
 ---
 
-## 14. Частые вопросы
+## 13. «Clear data» button
 
-**Плагин не появляется в меню.**
-Проверьте путь: внутри папки `KYB_import_coords` должны лежать файлы `__init__.py`, `plugin.py` и т.д. Если в папке ещё одна вложенная папка — переложите файлы на уровень выше. Перезапустите QGIS.
+Fully resets the current state (file field, data, table, map and spatial mode).
+Fields return to visible state. Settings (delimiter, CRS, colors) are **not** reset.
 
-**Файл не загружается — «Не похоже на координаты».**
-Причины: не тот разделитель, не та кодировка, в данных текст вместо чисел. Плагин может сам предложить другой разделитель — согласитесь, если это так.
+When loading a new source, clearing happens **automatically** before loading.
 
-**«Не удалось прочитать Excel».**
-Файл защищён паролем или повреждён. Откройте в Excel и сохраните как `.csv`.
+---
 
-**Ошибка «Неверная система координат».**
-Выбрана СК, которой нет в QGIS. Откройте список, выберите стандартную, или добавьте свою через **Настройки → Свои СК**.
+## 14. FAQ
 
-**Предупреждение «Данные не согласованы с СК».**
-Данные в метрах, а СК географическая (или наоборот). Скорее всего, выбрана не та СК.
+**The plugin does not appear in the menu.**
+Check the path: inside the `KYB_import_coords` folder there must be files
+`__init__.py`, `plugin.py`, etc. If there is another nested folder inside —
+move the files one level up. Restart QGIS.
 
-**Пропал объект из таблицы.**
-Убедитесь, что у объекта есть вершины. Если у объекта более 80 вершин, он обрезан строкой `... скрыто вершин: N ...` (сам объект при этом на карте отображается полностью).
+**File does not load — "Not coordinate-like".**
+Reasons: wrong delimiter, wrong encoding, text instead of numbers in data.
+The plugin may suggest another delimiter — accept it if so.
 
-**Подписи площадей перекрывают контур.**
-Пока не исправлено. Подпись ставится в центроид контура. Для сложных полигонов может лечь на грань.
+**"Could not read Excel".**
+The file is password-protected or damaged. Open in Excel and save as `.csv`.
+
+**"Invalid CRS" error.**
+A CRS is selected that QGIS does not have. Open the list, pick a standard one,
+or add your own via **Settings → Custom CRS**.
+
+**"Data is not consistent with CRS" warning.**
+Data in meters but CRS is geographic (or vice versa). Most likely, the wrong
+CRS is selected.
+
+**Feature disappeared from the table.**
+Make sure the feature has vertices. If a feature has more than 80 vertices, it
+is truncated by a `... vertices hidden: N ...` row (the feature itself is fully
+displayed on the map).
+
+**Area labels overlap the contour.**
+Not fixed yet. The label is placed at the contour centroid. For complex polygons
+it may fall on an edge.

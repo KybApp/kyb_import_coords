@@ -33,8 +33,16 @@ import os
 import re
 from collections import Counter
 
-from qgis.PyQt.QtCore import QEvent, QRectF, Qt
-from qgis.PyQt.QtGui import QBrush, QColor, QFont, QKeySequence, QPainter, QPen
+from qgis.PyQt.QtCore import QEvent, QRectF, Qt, QUrl
+from qgis.PyQt.QtGui import (
+    QBrush,
+    QColor,
+    QDesktopServices,
+    QFont,
+    QKeySequence,
+    QPainter,
+    QPen,
+)
 
 # ---------- Qt: виджеты и утилиты ----------
 from qgis.PyQt.QtWidgets import (
@@ -1506,6 +1514,10 @@ class ImportDialog(QDialog):
 
         # ---------- Нижние кнопки ----------
         row_btn = QHBoxLayout()
+        self.btn_help = QPushButton(tr("ImportDialog", "Справка"))
+        self.btn_help.clicked.connect(self.on_help)
+        row_btn.addWidget(self.btn_help)
+
         self.btn_clear = QPushButton(tr("ImportDialog", "Очистить данные"))
         self.btn_clear.clicked.connect(self.on_clear)
         row_btn.addWidget(self.btn_clear)
@@ -3102,6 +3114,24 @@ class ImportDialog(QDialog):
             self.geom_combo.setEnabled(True)
         except Exception as e:  # noqa: BLE001 — слот не должен ронять плагин
             _log_ignored_exception(e, "некритичная ошибка")
+
+    def on_help(self):
+        """Открывает локальную справку (HELP.html или HELP_ru.html)."""
+        s = QgsSettings()
+        locale = s.value("locale/userLocale", "", type=str)
+        lang = locale.split("_")[0] if "_" in locale else locale
+
+        plugin_dir = os.path.dirname(__file__)
+        filename = "HELP_ru.html" if lang == "ru" else "HELP.html"
+        help_path = os.path.join(plugin_dir, filename)
+
+        if os.path.exists(help_path):
+            QDesktopServices.openUrl(QUrl.fromLocalFile(help_path))
+        else:
+            # Запасной вариант: GitHub репозиторий
+            QDesktopServices.openUrl(
+                QUrl("https://github.com/KybApp/kyb_import_coords")
+            )
 
     def on_clear(self):
         """Полностью очищает форму и превью."""
