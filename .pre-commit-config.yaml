@@ -15,3 +15,8 @@ repos:
         args: ["-c", "pyproject.toml"]
         # Без этой библиотеки Bandit не сможет прочитать toml-файл
         additional_dependencies: ["bandit[toml]"]
+        
+  - repo: https://github.com/commitizen-tools/commitizen
+    rev: v4.19.3
+    hooks:
+      - id: commitizen

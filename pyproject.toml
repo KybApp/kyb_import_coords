@@ -26,3 +26,14 @@ exclude_dirs = [".venv", "venv", "__pycache__", ".git", "tests"]
 # Уровень серьезности (medium и выше — оптимально для QGIS)
 severity-level = "medium"
 confidence-level = "medium"
+
+# Настройка автоматического лога изменений и версии
+[tool.commitizen]
+name = "cz_conventional_commits"
+version = "0.16.4"
+version_files = ["metadata.txt:version="]
+tag_format = "v$version"
+update_changelog_on_bump = true
+changelog_file = "CHANGELOG.md"
+changelog_incremental = true
+major_version_zero = true
